@@ -1,0 +1,12 @@
+{
+  "calendar_ids": ["primary"],
+  "sync_interval_sec": 120,
+  "time_window_days": 14,
+  "idle_threshold_sec": 30,
+  "auto_cycle_clock_sec": 20,
+  "auto_cycle_calendar_sec": 40,
+  "font_path": "./assets/DejaVuSans.ttf",
+  "db_path": "./data/calendar.db",
+  "token_path": "./config/token.json",
+  "mock_mode": true
+}
