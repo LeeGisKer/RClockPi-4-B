@@ -2,7 +2,7 @@
 
 Fullscreen smart clock + calendar for Raspberry Pi OS using SDL2 + SDL2_ttf.
 
-## Dependencies
+## Dependencies (Raspberry Pi OS)
 
 ```bash
 sudo apt update
@@ -10,7 +10,9 @@ sudo apt install -y \
   build-essential cmake pkg-config \
   libsdl2-dev libsdl2-ttf-dev \
   libcurl4-openssl-dev libsqlite3-dev \
-  nlohmann-json3-dev
+  nlohmann-json3-dev \
+  ca-certificates \
+  fonts-dejavu-core
 ```
 
 ## Raspberry Pi run guide
