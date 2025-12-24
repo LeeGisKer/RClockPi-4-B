@@ -13,6 +13,40 @@ sudo apt install -y \
   nlohmann-json3-dev
 ```
 
+## Raspberry Pi run guide
+
+1) Clone or copy the project onto the Pi.
+
+2) Put a TTF font on the Pi and update `config/config.json`:
+   - Recommended: copy a font into `assets/` and set `"font_path": "./assets/DejaVuSans.ttf"`.
+
+3) Build:
+
+```bash
+mkdir -p build
+cd build
+cmake ..
+cmake --build . -j4
+```
+
+4) Run (fullscreen):
+
+```bash
+./rpi_calendar ../config/config.json
+```
+
+Keys: `Space` toggles views, `Esc` quits, `S` saves a screenshot to `data/preview.bmp`.
+
+### Common Pi notes
+
+- If SDL fails to open a display, run from the desktop session or try:
+
+```bash
+export SDL_VIDEODRIVER=kmsdrm
+```
+
+- For kiosk-style boot, add a systemd service that runs the binary on startup.
+
 ## Build
 
 ```bash

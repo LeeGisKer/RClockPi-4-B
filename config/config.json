@@ -5,7 +5,7 @@
   "idle_threshold_sec": 30,
   "auto_cycle_clock_sec": 20,
   "auto_cycle_calendar_sec": 40,
-  "font_path": "./assets/DejaVuSans.ttf",
+  "font_path": "./assets/Minecraft.ttf",
   "db_path": "./data/calendar.db",
   "token_path": "./config/token.json",
   "mock_mode": true
