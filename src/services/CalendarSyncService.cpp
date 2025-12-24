@@ -248,7 +248,7 @@ std::vector<std::string> UnfoldIcsLines(const std::string& text) {
     return lines;
 }
 
-bool FetchIcsEvents(CURL* curl, const SyncConfig& config, EventStore* store, std::string* error) {
+bool FetchIcsEvents(CURL* curl, const SyncConfig& config, EventStore* store, int64_t sync_ts, std::string* error) {
     if (config.ics_url.empty()) {
         std::cerr << "ICS URL is empty.\n";
         if (error) {
@@ -278,8 +278,6 @@ bool FetchIcsEvents(CURL* curl, const SyncConfig& config, EventStore* store, std
     bool has_end = false;
     bool start_is_date = false;
     bool end_is_date = false;
-    int64_t updated_ts = 0;
-
     int64_t now_ts = TimeUtil::NowTs();
     int64_t window_end = now_ts + static_cast<int64_t>(config.time_window_days) * 24 * 60 * 60;
 
@@ -300,7 +298,6 @@ bool FetchIcsEvents(CURL* curl, const SyncConfig& config, EventStore* store, std
             has_end = false;
             start_is_date = false;
             end_is_date = false;
-            updated_ts = 0;
             continue;
         }
 
@@ -324,7 +321,7 @@ bool FetchIcsEvents(CURL* curl, const SyncConfig& config, EventStore* store, std
                     ev.end_ts = ev.start_ts;
                 }
 
-                ev.updated_ts = updated_ts > 0 ? updated_ts : now_ts;
+                ev.updated_ts = sync_ts;
 
                 if (ev.end_ts >= now_ts && ev.start_ts <= window_end) {
                     store->UpsertEvent(ev);
@@ -385,13 +382,11 @@ bool FetchIcsEvents(CURL* curl, const SyncConfig& config, EventStore* store, std
                 }
             }
         } else if (name == "DTSTAMP" || name == "LAST-MODIFIED") {
-            time_t ts = 0;
-            if (ParseIcsDateTime(unescaped, &ts, nullptr)) {
-                updated_ts = static_cast<int64_t>(ts);
-            }
+            continue;
         }
     }
 
+    store->DeleteStaleInWindow("ics", now_ts, window_end, sync_ts);
     return true;
 }
 
@@ -500,7 +495,7 @@ bool CalendarSyncService::SyncOnce(EventStore* store, std::string* error) {
             }
             return false;
         }
-        bool ok = FetchIcsEvents(curl, ics_config, store, error);
+        bool ok = FetchIcsEvents(curl, ics_config, store, TimeUtil::NowTs(), error);
         curl_easy_cleanup(curl);
         return ok;
     }

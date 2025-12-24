@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdlib>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -90,19 +91,24 @@ std::string TruncateText(TTF_Font* font, const std::string& text, int max_width)
     return ellipsis;
 }
 
-void DrawCircle(SDL_Renderer* renderer, int cx, int cy, int radius) {
+void DrawPixel(SDL_Renderer* renderer, int x, int y, int size) {
+    SDL_Rect rect{ x - size / 2, y - size / 2, size, size };
+    SDL_RenderFillRect(renderer, &rect);
+}
+
+void DrawPixelCircle(SDL_Renderer* renderer, int cx, int cy, int radius, int pixel) {
     int x = radius;
     int y = 0;
     int err = 0;
     while (x >= y) {
-        SDL_RenderDrawPoint(renderer, cx + x, cy + y);
-        SDL_RenderDrawPoint(renderer, cx + y, cy + x);
-        SDL_RenderDrawPoint(renderer, cx - y, cy + x);
-        SDL_RenderDrawPoint(renderer, cx - x, cy + y);
-        SDL_RenderDrawPoint(renderer, cx - x, cy - y);
-        SDL_RenderDrawPoint(renderer, cx - y, cy - x);
-        SDL_RenderDrawPoint(renderer, cx + y, cy - x);
-        SDL_RenderDrawPoint(renderer, cx + x, cy - y);
+        DrawPixel(renderer, cx + x, cy + y, pixel);
+        DrawPixel(renderer, cx + y, cy + x, pixel);
+        DrawPixel(renderer, cx - y, cy + x, pixel);
+        DrawPixel(renderer, cx - x, cy + y, pixel);
+        DrawPixel(renderer, cx - x, cy - y, pixel);
+        DrawPixel(renderer, cx - y, cy - x, pixel);
+        DrawPixel(renderer, cx + y, cy - x, pixel);
+        DrawPixel(renderer, cx + x, cy - y, pixel);
         if (err <= 0) {
             ++y;
             err += 2 * y + 1;
@@ -114,9 +120,24 @@ void DrawCircle(SDL_Renderer* renderer, int cx, int cy, int radius) {
     }
 }
 
+void DrawPixelLine(SDL_Renderer* renderer, int x0, int y0, int x1, int y1, int pixel) {
+    int dx = std::abs(x1 - x0);
+    int dy = std::abs(y1 - y0);
+    int steps = std::max(dx, dy) / std::max(1, pixel);
+    if (steps < 1) {
+        steps = 1;
+    }
+    for (int i = 0; i <= steps; ++i) {
+        int x = x0 + (x1 - x0) * i / steps;
+        int y = y0 + (y1 - y0) * i / steps;
+        DrawPixel(renderer, x, y, pixel);
+    }
+}
+
 void DrawClockIcon(SDL_Renderer* renderer, int cx, int cy, int radius, int hour, int minute, int second) {
     constexpr double kPi = 3.14159265358979323846;
-    DrawCircle(renderer, cx, cy, radius);
+    int pixel = std::max(2, radius / 10);
+    DrawPixelCircle(renderer, cx, cy, radius, pixel);
     double minute_angle = (minute + second / 60.0) * 6.0;
     double hour_angle = ((hour % 12) + minute / 60.0) * 30.0;
 
@@ -124,11 +145,12 @@ void DrawClockIcon(SDL_Renderer* renderer, int cx, int cy, int radius, int hour,
         double rad = (angle_deg - 90.0) * kPi / 180.0;
         int x = static_cast<int>(std::round(cx + std::cos(rad) * length));
         int y = static_cast<int>(std::round(cy + std::sin(rad) * length));
-        SDL_RenderDrawLine(renderer, cx, cy, x, y);
+        DrawPixelLine(renderer, cx, cy, x, y, pixel);
     };
 
     draw_hand(hour_angle, radius - 10);
     draw_hand(minute_angle, radius - 4);
+    DrawPixel(renderer, cx, cy, pixel + 1);
 }
 
 std::string SyncStatusLabel(EventStore* store, int64_t now_ts) {

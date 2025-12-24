@@ -230,6 +230,29 @@ std::map<int, int> EventStore::GetEventDaysInMonth(int year, int month) {
     return counts;
 }
 
+bool EventStore::DeleteStaleInWindow(const std::string& calendar_id, int64_t window_start, int64_t window_end, int64_t min_updated_ts) {
+    const char* sql =
+        "DELETE FROM events WHERE calendar_id = ?"
+        " AND start_ts <= ? AND end_ts >= ?"
+        " AND updated_ts < ?";
+
+    auto stmt = Prepare(db_, sql);
+    if (!stmt) {
+        return false;
+    }
+
+    sqlite3_bind_text(stmt.get(), 1, calendar_id.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int64(stmt.get(), 2, window_end);
+    sqlite3_bind_int64(stmt.get(), 3, window_start);
+    sqlite3_bind_int64(stmt.get(), 4, min_updated_ts);
+
+    if (sqlite3_step(stmt.get()) != SQLITE_DONE) {
+        std::cerr << "SQLite delete stale failed: " << sqlite3_errmsg(db_) << "\n";
+        return false;
+    }
+    return true;
+}
+
 bool EventStore::SetMeta(const std::string& key, const std::string& value) {
     const char* sql =
         "INSERT INTO meta(key, value) VALUES(?, ?)"

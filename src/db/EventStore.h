@@ -32,6 +32,7 @@ public:
     bool GetNextEventAfter(int64_t ts, EventRecord* out);
     std::vector<EventRecord> GetEventsForDay(int64_t day_ts);
     std::map<int, int> GetEventDaysInMonth(int year, int month);
+    bool DeleteStaleInWindow(const std::string& calendar_id, int64_t window_start, int64_t window_end, int64_t min_updated_ts);
 
     bool SetMeta(const std::string& key, const std::string& value);
     std::string GetMeta(const std::string& key);
