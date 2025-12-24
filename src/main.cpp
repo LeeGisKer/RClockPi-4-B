@@ -15,6 +15,38 @@
 #include <fstream>
 #include <iostream>
 
+namespace {
+
+std::filesystem::path ResolvePath(const std::filesystem::path& config_path,
+                                  const std::string& value,
+                                  bool allow_parent_fallback) {
+    if (value.empty()) {
+        return {};
+    }
+    std::filesystem::path input(value);
+    if (input.is_absolute()) {
+        return input;
+    }
+    std::filesystem::path base = std::filesystem::absolute(config_path).parent_path();
+    std::filesystem::path candidate = base / input;
+    if (!allow_parent_fallback) {
+        return candidate;
+    }
+    std::filesystem::path fallback = base.parent_path() / input;
+    if (std::filesystem::exists(candidate)) {
+        return candidate;
+    }
+    if (std::filesystem::exists(fallback)) {
+        return fallback;
+    }
+    if (!std::filesystem::exists(candidate.parent_path()) && std::filesystem::exists(fallback.parent_path())) {
+        return fallback;
+    }
+    return candidate;
+}
+
+} // namespace
+
 struct AppConfig {
     int sync_interval_sec = 120;
     int time_window_days = 14;
@@ -67,6 +99,11 @@ int main(int argc, char** argv) {
     if (!LoadConfig(config_path, &config)) {
         return 1;
     }
+
+    std::filesystem::path config_abs = std::filesystem::absolute(config_path);
+    config.font_path = ResolvePath(config_abs, config.font_path, true).string();
+    config.sprite_dir = ResolvePath(config_abs, config.sprite_dir, true).string();
+    config.db_path = ResolvePath(config_abs, config.db_path, true).string();
 
     std::filesystem::create_directories(std::filesystem::path(config.db_path).parent_path());
 

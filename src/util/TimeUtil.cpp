@@ -38,9 +38,15 @@ int64_t EndOfDay(time_t ts) {
 
 std::string FormatTimeHHMM(time_t ts) {
     std::tm tm = LocalTime(ts);
+    int hour24 = tm.tm_hour;
+    int hour12 = hour24 % 12;
+    if (hour12 == 0) {
+        hour12 = 12;
+    }
     std::ostringstream oss;
-    oss << std::setfill('0') << std::setw(2) << tm.tm_hour
-        << ":" << std::setfill('0') << std::setw(2) << tm.tm_min;
+    oss << hour12
+        << ":" << std::setfill('0') << std::setw(2) << tm.tm_min
+        << (hour24 < 12 ? " AM" : " PM");
     return oss.str();
 }
 

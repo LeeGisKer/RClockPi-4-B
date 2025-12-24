@@ -8,5 +8,5 @@
   "db_path": "./data/calendar.db",
   "mock_mode": false,
   "ics_url": "https://calendar.google.com/calendar/ical/ax2gil8%40gmail.com/private-5598ccca84b18a95989a44c0c9751a3e/basic.ics",
-  "sprite_dir": "./assets/sprites"
+  "sprite_dir": "../assets/sprites"
 }
