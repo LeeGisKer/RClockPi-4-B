@@ -171,7 +171,7 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    TTF_Font* font_time = TTF_OpenFont(config.font_path.c_str(), 64);
+    TTF_Font* font_time = TTF_OpenFont(config.font_path.c_str(), 80);
     TTF_Font* font_date = TTF_OpenFont(config.font_path.c_str(), 18);
     TTF_Font* font_info = TTF_OpenFont(config.font_path.c_str(), 16);
     TTF_Font* font_header = TTF_OpenFont(config.font_path.c_str(), 18);

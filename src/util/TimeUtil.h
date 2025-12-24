@@ -11,6 +11,8 @@ std::tm LocalTime(time_t ts);
 int64_t StartOfDay(time_t ts);
 int64_t EndOfDay(time_t ts);
 std::string FormatTimeHHMM(time_t ts);
+std::string FormatTimeHHMMNoSuffix(time_t ts);
+std::string FormatAmPm(time_t ts);
 std::string FormatDateLine(time_t ts);
 std::string FormatMonthYear(time_t ts);
 int DaysInMonth(int year, int month); // month: 1-12

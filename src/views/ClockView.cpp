@@ -265,6 +265,7 @@ void ClockView::ClearCache() {
         }
     };
     destroy(time_text_);
+    destroy(ampm_text_);
     destroy(date_text_);
     destroy(footer_text_);
     for (auto& item : right_texts_) {
@@ -387,7 +388,8 @@ void ClockView::UpdateCache(int width, int height, int64_t now_ts) {
     SDL_Color fg = { 28, 28, 28, 255 };
     SDL_Color dim = { 110, 110, 110, 255 };
 
-    UpdateText(time_text_, time_font_, TimeUtil::FormatTimeHHMM(now_ts), fg);
+    UpdateText(time_text_, time_font_, TimeUtil::FormatTimeHHMMNoSuffix(now_ts), fg);
+    UpdateText(ampm_text_, info_font_, TimeUtil::FormatAmPm(now_ts), dim);
     UpdateText(date_text_, date_font_, TimeUtil::FormatDateLine(now_ts), dim);
 
     std::string next_line;
@@ -502,6 +504,12 @@ void ClockView::Render(int width, int height) {
         int time_y = layout.top_y + (layout.top_h - time_text_.h) / 2 + 6;
         SDL_Rect dst{ time_x, time_y, time_text_.w, time_text_.h };
         SDL_RenderCopy(renderer_, time_text_.texture, nullptr, &dst);
+        if (ampm_text_.texture) {
+            int ampm_x = time_x + time_text_.w + 8;
+            int ampm_y = time_y + 6;
+            SDL_Rect ampm_dst{ ampm_x, ampm_y, ampm_text_.w, ampm_text_.h };
+            SDL_RenderCopy(renderer_, ampm_text_.texture, nullptr, &ampm_dst);
+        }
     }
 
     int line_y = layout.right_y;

@@ -61,6 +61,7 @@ private:
     int64_t last_minute_ = -1;
 
     CachedText time_text_;
+    CachedText ampm_text_;
     CachedText date_text_;
     CachedText footer_text_;
     std::array<CachedText, 4> right_texts_;
