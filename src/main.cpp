@@ -53,6 +53,10 @@ struct AppConfig {
     int idle_threshold_sec = 30;
     int auto_cycle_clock_sec = 1200;
     int auto_cycle_calendar_sec = 1200;
+    bool night_mode_enabled = true;
+    int night_start_hour = 21;
+    int night_end_hour = 6;
+    int night_dim_alpha = 110;
     std::string font_path = "./assets/DejaVuSans.ttf";
     std::string db_path = "./data/calendar.db";
     bool mock_mode = true;
@@ -80,6 +84,10 @@ bool LoadConfig(const std::string& path, AppConfig* out) {
     out->idle_threshold_sec = j.value("idle_threshold_sec", out->idle_threshold_sec);
     out->auto_cycle_clock_sec = j.value("auto_cycle_clock_sec", out->auto_cycle_clock_sec);
     out->auto_cycle_calendar_sec = j.value("auto_cycle_calendar_sec", out->auto_cycle_calendar_sec);
+    out->night_mode_enabled = j.value("night_mode_enabled", out->night_mode_enabled);
+    out->night_start_hour = j.value("night_start_hour", out->night_start_hour);
+    out->night_end_hour = j.value("night_end_hour", out->night_end_hour);
+    out->night_dim_alpha = j.value("night_dim_alpha", out->night_dim_alpha);
     out->font_path = j.value("font_path", out->font_path);
     out->db_path = j.value("db_path", out->db_path);
     out->mock_mode = j.value("mock_mode", out->mock_mode);
@@ -203,9 +211,13 @@ int main(int argc, char** argv) {
             while (SDL_PollEvent(&ev)) {
                 if (ev.type == SDL_QUIT) {
                     running = false;
-                } else if (ev.type == SDL_KEYDOWN) {
-                    last_input = std::chrono::steady_clock::now();
-                    auto_cycle = false;
+            } else if (ev.type == SDL_KEYDOWN) {
+                bool was_auto_cycle = auto_cycle;
+                last_input = std::chrono::steady_clock::now();
+                auto_cycle = false;
+                if (was_auto_cycle) {
+                    current_view = ViewMode::Clock;
+                }
 
                     switch (ev.key.keysym.sym) {
                         case SDLK_ESCAPE:
@@ -258,22 +270,22 @@ int main(int argc, char** argv) {
                 }
             }
 
-            auto now = std::chrono::steady_clock::now();
-            auto idle_sec = std::chrono::duration_cast<std::chrono::seconds>(now - last_input).count();
-            if (!auto_cycle && idle_sec >= config.idle_threshold_sec) {
-                auto_cycle = true;
-                auto_cycle_start = now;
-                current_view = ViewMode::Clock;
-            }
+        auto now = std::chrono::steady_clock::now();
+        auto idle_sec = std::chrono::duration_cast<std::chrono::seconds>(now - last_input).count();
+        if (!auto_cycle && idle_sec >= config.idle_threshold_sec) {
+            auto_cycle = true;
+            auto_cycle_start = now;
+            current_view = ViewMode::Calendar;
+        }
 
-            if (auto_cycle) {
-                int cycle_total = config.auto_cycle_clock_sec + config.auto_cycle_calendar_sec;
-                if (cycle_total > 0) {
-                    int elapsed = static_cast<int>(std::chrono::duration_cast<std::chrono::seconds>(now - auto_cycle_start).count());
-                    int mod = elapsed % cycle_total;
-                    current_view = (mod < config.auto_cycle_clock_sec) ? ViewMode::Clock : ViewMode::Calendar;
-                }
+        if (auto_cycle) {
+            int cycle_total = config.auto_cycle_clock_sec + config.auto_cycle_calendar_sec;
+            if (cycle_total > 0) {
+                int elapsed = static_cast<int>(std::chrono::duration_cast<std::chrono::seconds>(now - auto_cycle_start).count());
+                int mod = elapsed % cycle_total;
+                current_view = (mod < config.auto_cycle_calendar_sec) ? ViewMode::Calendar : ViewMode::Clock;
             }
+        }
 
             SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
             SDL_RenderClear(renderer);
@@ -285,6 +297,28 @@ int main(int argc, char** argv) {
                 clock_view.Render(w, h);
             } else {
                 calendar_view.Render(w, h);
+            }
+
+            if (config.night_mode_enabled) {
+                std::tm now_tm = TimeUtil::LocalTime(TimeUtil::NowTs());
+                int hour = now_tm.tm_hour;
+                bool is_night = false;
+                if (config.night_start_hour == config.night_end_hour) {
+                    is_night = false;
+                } else if (config.night_start_hour < config.night_end_hour) {
+                    is_night = (hour >= config.night_start_hour && hour < config.night_end_hour);
+                } else {
+                    is_night = (hour >= config.night_start_hour || hour < config.night_end_hour);
+                }
+
+                if (is_night && config.night_dim_alpha > 0) {
+                    int alpha = std::min(255, std::max(0, config.night_dim_alpha));
+                    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+                    SDL_SetRenderDrawColor(renderer, 0, 0, 0, static_cast<Uint8>(alpha));
+                    SDL_Rect dim_rect{ 0, 0, w, h };
+                    SDL_RenderFillRect(renderer, &dim_rect);
+                    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
+                }
             }
 
             SDL_RenderPresent(renderer);

@@ -79,6 +79,7 @@ std::string SyncStatusText(EventStore* store, int64_t now_ts) {
     }
     std::string status = store->GetMeta("last_sync_status");
     std::string ts_str = store->GetMeta("last_sync_ts");
+    std::string err = store->GetMeta("last_sync_error");
     std::string label = status.empty() ? "Offline" : status;
 
     if (label == "online") {
@@ -90,8 +91,10 @@ std::string SyncStatusText(EventStore* store, int64_t now_ts) {
     }
 
     if (ts_str.empty()) {
-        std::string err = store->GetMeta("last_sync_error");
         if (!err.empty()) {
+            if (err.find("ics_url") != std::string::npos) {
+                return "Auth needed";
+            }
             return label + " (" + err + ")";
         }
         return label + " (never)";
@@ -106,6 +109,12 @@ std::string SyncStatusText(EventStore* store, int64_t now_ts) {
     int64_t minutes = (now_ts - last_ts) / 60;
     if (minutes < 0) {
         minutes = 0;
+    }
+    if (label == "Online") {
+        return "Synced " + std::to_string(minutes) + "m ago";
+    }
+    if (!err.empty() && err.find("ics_url") != std::string::npos) {
+        return "Auth needed";
     }
     return label + " (" + std::to_string(minutes) + "m)";
 }

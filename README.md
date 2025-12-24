@@ -77,6 +77,7 @@ Edit `config/config.json`:
 - `sync_interval_sec`, `time_window_days`: sync behavior
 - `ics_url`: secret iCal (ICS) URL to sync your calendar (required for live data)
 - `sprite_dir`: folder for time-of-day sprites (default `./assets/sprites`)
+- `night_mode_enabled`, `night_start_hour`, `night_end_hour`, `night_dim_alpha`: dim the screen during night hours
 - Keep `ics_url` private; it grants read access to the calendar.
 
 ## Using a secret iCal (ICS) URL

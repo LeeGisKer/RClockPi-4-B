@@ -161,6 +161,7 @@ std::string SyncStatusLabel(EventStore* store, int64_t now_ts) {
     }
     std::string status = store->GetMeta("last_sync_status");
     std::string ts_str = store->GetMeta("last_sync_ts");
+    std::string err = store->GetMeta("last_sync_error");
     std::string label = status.empty() ? "Offline" : status;
     if (label == "online") {
         label = "Online";
@@ -170,8 +171,10 @@ std::string SyncStatusLabel(EventStore* store, int64_t now_ts) {
         label = "Mock";
     }
     if (ts_str.empty()) {
-        std::string err = store->GetMeta("last_sync_error");
         if (!err.empty()) {
+            if (err.find("ics_url") != std::string::npos) {
+                return "Auth needed";
+            }
             return label + " (" + err + ")";
         }
         return label + " (never)";
@@ -186,6 +189,12 @@ std::string SyncStatusLabel(EventStore* store, int64_t now_ts) {
     if (minutes < 0) {
         minutes = 0;
     }
+    if (label == "Online") {
+        return "Synced " + std::to_string(minutes) + "m ago";
+    }
+    if (!err.empty() && err.find("ics_url") != std::string::npos) {
+        return "Auth needed";
+    }
     return label + " (" + std::to_string(minutes) + "m)";
 }
 
@@ -198,6 +207,18 @@ std::string JoinPath(const std::string& dir, const std::string& file) {
         return dir + file;
     }
     return dir + "/" + file;
+}
+
+std::string FormatCountdown(int total_minutes) {
+    if (total_minutes <= 0) {
+        return "now";
+    }
+    int hours = total_minutes / 60;
+    int minutes = total_minutes % 60;
+    if (hours > 0) {
+        return "in " + std::to_string(hours) + "h " + std::to_string(minutes) + "m";
+    }
+    return "in " + std::to_string(minutes) + "m";
 }
 
 } // namespace
@@ -359,6 +380,7 @@ void ClockView::UpdateCache(int width, int height, int64_t now_ts) {
     UpdateText(date_text_, date_font_, TimeUtil::FormatDateLine(now_ts), dim);
 
     std::string next_line;
+    std::string next_countdown = "No events";
     EventRecord next_event;
     bool has_next = store_ && store_->GetNextEventAfter(now_ts, &next_event);
     if (has_next && next_event.start_ts <= TimeUtil::EndOfDay(now_ts)) {
@@ -366,6 +388,7 @@ void ClockView::UpdateCache(int width, int height, int64_t now_ts) {
         if (minutes < 0) {
             minutes = 0;
         }
+        next_countdown = FormatCountdown(minutes);
         next_line = "Next: " + TimeUtil::FormatTimeHHMM(next_event.start_ts) + " - " + next_event.title + " (in " + std::to_string(minutes) + "m)";
     } else {
         next_line = "No more events today";
@@ -386,12 +409,9 @@ void ClockView::UpdateCache(int width, int height, int64_t now_ts) {
         }
     }
 
-    std::string next_short = has_next ? (TimeUtil::FormatTimeHHMM(next_event.start_ts) + " " + next_event.title) : "No events";
-    next_short = TruncateText(info_font_, next_short, layout.right_max_w);
-
     std::array<std::string, 4> right_lines = {
-        "Next up",
-        next_short,
+        "Next event",
+        next_countdown,
         "Today: " + std::to_string(static_cast<int>(today_events.size())) + " events",
         SyncStatusLabel(store_, now_ts)
     };
