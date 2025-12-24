@@ -319,7 +319,7 @@ bool ClockView::DrawSpriteForHour(int hour, const SDL_Rect& area) {
         return false;
     }
 
-    int pad = std::max(8, area.w / 12);
+    int pad = std::max(12, area.w / 6);
     int max_w = area.w - pad * 2;
     int max_h = area.h - pad * 2;
     if (max_w <= 0 || max_h <= 0) {

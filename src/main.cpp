@@ -163,7 +163,7 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    TTF_Font* font_time = TTF_OpenFont(config.font_path.c_str(), 96);
+    TTF_Font* font_time = TTF_OpenFont(config.font_path.c_str(), 72);
     TTF_Font* font_date = TTF_OpenFont(config.font_path.c_str(), 20);
     TTF_Font* font_info = TTF_OpenFont(config.font_path.c_str(), 18);
     TTF_Font* font_header = TTF_OpenFont(config.font_path.c_str(), 22);
@@ -275,7 +275,7 @@ int main(int argc, char** argv) {
                 }
             }
 
-            SDL_SetRenderDrawColor(renderer, 238, 236, 232, 255);
+            SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
             SDL_RenderClear(renderer);
 
             int w = 0, h = 0;
