@@ -165,6 +165,22 @@ std::string IcsUnescape(const std::string& value) {
     return out;
 }
 
+std::string Trim(const std::string& value) {
+    size_t start = 0;
+    while (start < value.size() && std::isspace(static_cast<unsigned char>(value[start]))) {
+        ++start;
+    }
+    size_t end = value.size();
+    while (end > start && std::isspace(static_cast<unsigned char>(value[end - 1]))) {
+        --end;
+    }
+    return value.substr(start, end - start);
+}
+
+bool LooksLikeUrl(const std::string& value) {
+    return value.rfind("http://", 0) == 0 || value.rfind("https://", 0) == 0;
+}
+
 bool ParseIcsDate(const std::string& value, time_t* out) {
     if (value.size() < 8) {
         return false;
@@ -270,6 +286,10 @@ std::vector<std::string> UnfoldIcsLines(const std::string& text) {
 }
 
 bool FetchIcsEvents(CURL* curl, const SyncConfig& config, EventStore* store) {
+    if (config.ics_url.empty()) {
+        std::cerr << "ICS URL is empty.\n";
+        return false;
+    }
     HttpResponse resp;
     if (!HttpGet(curl, config.ics_url, {}, &resp)) {
         return false;
@@ -663,15 +683,27 @@ bool CalendarSyncService::SyncOnce(EventStore* store) {
         return false;
     }
 
-    if (!config_.ics_url.empty()) {
+    std::string ics_url = Trim(config_.ics_url);
+    if (!ics_url.empty()) {
+        if (!LooksLikeUrl(ics_url)) {
+            std::cerr << "ICS URL is not a valid http(s) URL.\n";
+            return false;
+        }
+        SyncConfig ics_config = config_;
+        ics_config.ics_url = ics_url;
         CURL* curl = curl_easy_init();
         if (!curl) {
             std::cerr << "libcurl init failed\n";
             return false;
         }
-        bool ok = FetchIcsEvents(curl, config_, store);
+        bool ok = FetchIcsEvents(curl, ics_config, store);
         curl_easy_cleanup(curl);
         return ok;
+    }
+
+    if (config_.client_id.empty() || config_.client_secret.empty()) {
+        std::cerr << "OAuth not configured. Set ics_url or provide client_id/client_secret.\n";
+        return false;
     }
 
     TokenInfo token;
