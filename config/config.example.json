@@ -12,5 +12,5 @@
   "db_path": "./data/calendar.db",
   "mock_mode": false,
   "ics_url": "",
-  "sprite_dir": "../assets/sprites"
+  "sprite_dir": "./assets/sprites"
 }

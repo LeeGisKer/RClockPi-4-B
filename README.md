@@ -68,7 +68,7 @@ The app runs fullscreen by default. Press `Esc` to quit.
 
 ## Config
 
-Edit `config/config.json`:
+Copy `config/config.example.json` to `config/config.json` and edit it:
 
 - `font_path`: path to a TTF font file (required)
 - `db_path`: SQLite cache path
