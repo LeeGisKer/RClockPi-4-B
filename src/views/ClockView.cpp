@@ -234,6 +234,17 @@ ClockView::~ClockView() {
 }
 
 void ClockView::UpdateText(CachedText& cache, TTF_Font* font, const std::string& text, SDL_Color color) {
+    if (text.empty()) {
+        if (cache.texture) {
+            SDL_DestroyTexture(cache.texture);
+            cache.texture = nullptr;
+        }
+        cache.text.clear();
+        cache.w = 0;
+        cache.h = 0;
+        cache.color = color;
+        return;
+    }
     if (cache.texture && cache.text == text && cache.color.r == color.r && cache.color.g == color.g && cache.color.b == color.b && cache.color.a == color.a) {
         return;
     }
@@ -380,7 +391,6 @@ void ClockView::UpdateCache(int width, int height, int64_t now_ts) {
     UpdateText(date_text_, date_font_, TimeUtil::FormatDateLine(now_ts), dim);
 
     std::string next_line;
-    std::string next_countdown = "No events";
     EventRecord next_event;
     bool has_next = store_ && store_->GetNextEventAfter(now_ts, &next_event);
     if (has_next && next_event.start_ts <= TimeUtil::EndOfDay(now_ts)) {
@@ -388,10 +398,10 @@ void ClockView::UpdateCache(int width, int height, int64_t now_ts) {
         if (minutes < 0) {
             minutes = 0;
         }
-        next_countdown = FormatCountdown(minutes);
-        next_line = "Next: " + TimeUtil::FormatTimeHHMM(next_event.start_ts) + " - " + next_event.title + " (in " + std::to_string(minutes) + "m)";
+        std::string countdown = FormatCountdown(minutes);
+        next_line = "Next: " + TimeUtil::FormatTimeHHMM(next_event.start_ts) + " - " + next_event.title + " (" + countdown + ")";
     } else {
-        next_line = "No more events today";
+        next_line = "Next: No upcoming events";
     }
     std::string footer_text = TruncateText(info_font_, next_line, layout.footer_max_w);
     UpdateText(footer_text_, info_font_, footer_text, dim);
@@ -409,24 +419,46 @@ void ClockView::UpdateCache(int width, int height, int64_t now_ts) {
         }
     }
 
+    std::string next_summary;
+    if (has_next && next_event.start_ts <= TimeUtil::EndOfDay(now_ts)) {
+        int minutes = static_cast<int>((next_event.start_ts - now_ts) / 60);
+        if (minutes < 0) {
+            minutes = 0;
+        }
+        std::string countdown = FormatCountdown(minutes);
+        next_summary = "Next: " + TimeUtil::FormatTimeHHMM(next_event.start_ts) + " - " + next_event.title + " (" + countdown + ")";
+    } else {
+        next_summary = "Next: No upcoming events";
+    }
+    next_summary = TruncateText(info_font_, next_summary, layout.right_max_w);
+
+    std::string today_summary = (today_events.size() > 0)
+        ? ("Today: " + std::to_string(static_cast<int>(today_events.size())) + " events")
+        : "Today: Free";
+
     std::array<std::string, 4> right_lines = {
-        "Next event",
-        next_countdown,
-        "Today: " + std::to_string(static_cast<int>(today_events.size())) + " events",
-        SyncStatusLabel(store_, now_ts)
+        next_summary,
+        today_summary,
+        SyncStatusLabel(store_, now_ts),
+        ""
     };
 
     for (size_t i = 0; i < right_lines.size(); ++i) {
-        SDL_Color color = (i == 1) ? fg : dim;
+        SDL_Color color = (i == 0) ? fg : dim;
         UpdateText(right_texts_[i], info_font_, right_lines[i], color);
     }
 
-    std::array<std::string, 4> labels = { "Today", "Tomorrow", "All day", "Remaining" };
+    std::array<std::string, 4> labels = {
+        "Today",
+        (tomorrow_events.size() > 0) ? "Tomorrow" : "",
+        (all_day_today > 0) ? "All day" : "",
+        (remaining_today > 0) ? "Remaining" : ""
+    };
     std::array<std::string, 4> values = {
-        std::to_string(static_cast<int>(today_events.size())) + " events",
-        std::to_string(static_cast<int>(tomorrow_events.size())) + " events",
-        std::to_string(all_day_today) + " today",
-        std::to_string(remaining_today) + " today"
+        (today_events.size() > 0) ? (std::to_string(static_cast<int>(today_events.size())) + " events") : "Free",
+        (tomorrow_events.size() > 0) ? (std::to_string(static_cast<int>(tomorrow_events.size())) + " events") : "",
+        (all_day_today > 0) ? (std::to_string(all_day_today) + " today") : "",
+        (remaining_today > 0) ? (std::to_string(remaining_today) + " today") : ""
     };
 
     for (size_t i = 0; i < labels.size(); ++i) {
