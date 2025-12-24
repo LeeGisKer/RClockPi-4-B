@@ -30,7 +30,7 @@ public:
 
 private:
     void Run();
-    bool SyncOnce(EventStore* store);
+    bool SyncOnce(EventStore* store, std::string* error);
 
     SyncConfig config_;
     std::atomic<bool> running_{false};

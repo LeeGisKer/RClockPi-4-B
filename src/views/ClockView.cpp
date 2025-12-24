@@ -134,6 +134,10 @@ std::string SyncStatusLabel(EventStore* store, int64_t now_ts) {
         label = "Mock";
     }
     if (ts_str.empty()) {
+        std::string err = store->GetMeta("last_sync_error");
+        if (!err.empty()) {
+            return label + " (" + err + ")";
+        }
         return label + " (never)";
     }
     int64_t last_ts = 0;

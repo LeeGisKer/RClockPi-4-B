@@ -54,6 +54,7 @@ bool HttpPostForm(CURL* curl, const std::string& url, const std::string& form_bo
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, 15L);
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
+    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
 
     CURLcode res = curl_easy_perform(curl);
     if (res != CURLE_OK) {
@@ -77,6 +78,7 @@ bool HttpGet(CURL* curl, const std::string& url, const std::vector<std::string>&
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, 15L);
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
+    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
 
     struct curl_slist* header_list = nullptr;
     for (const auto& header : headers) {
@@ -285,17 +287,26 @@ std::vector<std::string> UnfoldIcsLines(const std::string& text) {
     return lines;
 }
 
-bool FetchIcsEvents(CURL* curl, const SyncConfig& config, EventStore* store) {
+bool FetchIcsEvents(CURL* curl, const SyncConfig& config, EventStore* store, std::string* error) {
     if (config.ics_url.empty()) {
         std::cerr << "ICS URL is empty.\n";
+        if (error) {
+            *error = "ics_url empty";
+        }
         return false;
     }
     HttpResponse resp;
     if (!HttpGet(curl, config.ics_url, {}, &resp)) {
+        if (error) {
+            *error = "ics http failed";
+        }
         return false;
     }
     if (resp.code != 200) {
         std::cerr << "ICS fetch failed (HTTP " << resp.code << ")\n";
+        if (error) {
+            *error = "ics http " + std::to_string(resp.code);
+        }
         return false;
     }
 
@@ -649,6 +660,7 @@ void CalendarSyncService::Run() {
     while (running_) {
         int64_t now_ts = TimeUtil::NowTs();
         bool ok = false;
+        std::string error;
 
         if (config_.mock_mode) {
             if (!seeded) {
@@ -658,14 +670,18 @@ void CalendarSyncService::Run() {
                 ok = true;
             }
             store.SetMeta("last_sync_status", "mock");
+            store.SetMeta("last_sync_error", "");
         } else {
-            ok = SyncOnce(&store);
+            ok = SyncOnce(&store, &error);
             store.SetMeta("last_sync_status", ok ? "online" : "offline");
         }
 
         store.SetMeta("last_sync_ts", std::to_string(now_ts));
         if (!ok) {
-            store.SetMeta("last_sync_error", "sync failed");
+            if (error.empty()) {
+                error = "sync failed";
+            }
+            store.SetMeta("last_sync_error", error);
         } else {
             store.SetMeta("last_sync_error", "");
         }
@@ -678,8 +694,11 @@ void CalendarSyncService::Run() {
     curl_global_cleanup();
 }
 
-bool CalendarSyncService::SyncOnce(EventStore* store) {
+bool CalendarSyncService::SyncOnce(EventStore* store, std::string* error) {
     if (!store) {
+        if (error) {
+            *error = "store null";
+        }
         return false;
     }
 
@@ -687,6 +706,9 @@ bool CalendarSyncService::SyncOnce(EventStore* store) {
     if (!ics_url.empty()) {
         if (!LooksLikeUrl(ics_url)) {
             std::cerr << "ICS URL is not a valid http(s) URL.\n";
+            if (error) {
+                *error = "ics_url invalid";
+            }
             return false;
         }
         SyncConfig ics_config = config_;
@@ -694,25 +716,37 @@ bool CalendarSyncService::SyncOnce(EventStore* store) {
         CURL* curl = curl_easy_init();
         if (!curl) {
             std::cerr << "libcurl init failed\n";
+            if (error) {
+                *error = "curl init failed";
+            }
             return false;
         }
-        bool ok = FetchIcsEvents(curl, ics_config, store);
+        bool ok = FetchIcsEvents(curl, ics_config, store, error);
         curl_easy_cleanup(curl);
         return ok;
     }
 
     if (config_.client_id.empty() || config_.client_secret.empty()) {
         std::cerr << "OAuth not configured. Set ics_url or provide client_id/client_secret.\n";
+        if (error) {
+            *error = "oauth not configured";
+        }
         return false;
     }
 
     TokenInfo token;
     if (!OAuthTokenStore::LoadFromFile(config_.token_path, &token)) {
+        if (error) {
+            *error = "token load failed";
+        }
         return false;
     }
 
     if (token.refresh_token.empty()) {
         std::cerr << "Refresh token missing in token.json\n";
+        if (error) {
+            *error = "refresh token missing";
+        }
         return false;
     }
 
@@ -722,12 +756,18 @@ bool CalendarSyncService::SyncOnce(EventStore* store) {
     CURL* curl = curl_easy_init();
     if (!curl) {
         std::cerr << "libcurl init failed\n";
+        if (error) {
+            *error = "curl init failed";
+        }
         return false;
     }
 
     bool ok = true;
     if (need_refresh) {
         ok = RefreshAccessToken(curl, config_, &token);
+        if (!ok && error) {
+            *error = "token refresh failed";
+        }
     }
 
     if (ok) {
@@ -736,14 +776,23 @@ bool CalendarSyncService::SyncOnce(EventStore* store) {
             if (!FetchCalendarEvents(curl, config_, calendar_id, token.access_token, store, &unauthorized)) {
                 if (unauthorized) {
                     if (!RefreshAccessToken(curl, config_, &token)) {
+                        if (error) {
+                            *error = "token refresh failed";
+                        }
                         ok = false;
                         break;
                     }
                     if (!FetchCalendarEvents(curl, config_, calendar_id, token.access_token, store, nullptr)) {
+                        if (error) {
+                            *error = "events fetch failed";
+                        }
                         ok = false;
                         break;
                     }
                 } else {
+                    if (error) {
+                        *error = "events fetch failed";
+                    }
                     ok = false;
                     break;
                 }

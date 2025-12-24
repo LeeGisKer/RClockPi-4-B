@@ -90,6 +90,10 @@ std::string SyncStatusText(EventStore* store, int64_t now_ts) {
     }
 
     if (ts_str.empty()) {
+        std::string err = store->GetMeta("last_sync_error");
+        if (!err.empty()) {
+            return label + " (" + err + ")";
+        }
         return label + " (never)";
     }
 
