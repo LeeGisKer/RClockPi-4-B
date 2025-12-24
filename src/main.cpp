@@ -272,10 +272,9 @@ int main(int argc, char** argv) {
 
         auto now = std::chrono::steady_clock::now();
         auto idle_sec = std::chrono::duration_cast<std::chrono::seconds>(now - last_input).count();
-        if (!auto_cycle && idle_sec >= config.idle_threshold_sec) {
-            auto_cycle = true;
-            auto_cycle_start = now;
-            current_view = ViewMode::Calendar;
+        if (idle_sec >= config.idle_threshold_sec) {
+            auto_cycle = false;
+            current_view = ViewMode::Clock;
         }
 
         if (auto_cycle) {
