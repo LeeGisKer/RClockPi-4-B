@@ -2,10 +2,11 @@
   "sync_interval_sec": 120,
   "time_window_days": 14,
   "idle_threshold_sec": 30,
-  "auto_cycle_clock_sec": 20,
-  "auto_cycle_calendar_sec": 40,
+  "auto_cycle_clock_sec": 1200,
+  "auto_cycle_calendar_sec": 1200,
   "font_path": "../assets/Minecraft.ttf",
   "db_path": "./data/calendar.db",
   "mock_mode": false,
-  "ics_url": "https://calendar.google.com/calendar/ical/ax2gil8%40gmail.com/private-5598ccca84b18a95989a44c0c9751a3e/basic.ics"
+  "ics_url": "https://calendar.google.com/calendar/ical/ax2gil8%40gmail.com/private-5598ccca84b18a95989a44c0c9751a3e/basic.ics",
+  "sprite_dir": "./assets/sprites"
 }

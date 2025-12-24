@@ -1,5 +1,6 @@
 #include <SDL.h>
 #include <SDL_ttf.h>
+#include <SDL_image.h>
 
 #include <nlohmann/json.hpp>
 
@@ -18,12 +19,13 @@ struct AppConfig {
     int sync_interval_sec = 120;
     int time_window_days = 14;
     int idle_threshold_sec = 30;
-    int auto_cycle_clock_sec = 20;
-    int auto_cycle_calendar_sec = 40;
+    int auto_cycle_clock_sec = 1200;
+    int auto_cycle_calendar_sec = 1200;
     std::string font_path = "./assets/DejaVuSans.ttf";
     std::string db_path = "./data/calendar.db";
     bool mock_mode = true;
     std::string ics_url;
+    std::string sprite_dir = "./assets/sprites";
 };
 
 bool LoadConfig(const std::string& path, AppConfig* out) {
@@ -50,6 +52,7 @@ bool LoadConfig(const std::string& path, AppConfig* out) {
     out->db_path = j.value("db_path", out->db_path);
     out->mock_mode = j.value("mock_mode", out->mock_mode);
     out->ics_url = j.value("ics_url", out->ics_url);
+    out->sprite_dir = j.value("sprite_dir", out->sprite_dir);
 
     return true;
 }
@@ -92,6 +95,10 @@ int main(int argc, char** argv) {
         std::cerr << "TTF_Init failed: " << TTF_GetError() << "\n";
         SDL_Quit();
         return 1;
+    }
+
+    if ((IMG_Init(IMG_INIT_PNG) & IMG_INIT_PNG) == 0) {
+        std::cerr << "IMG_Init failed: " << IMG_GetError() << "\n";
     }
 
     SDL_Window* window = SDL_CreateWindow(
@@ -142,7 +149,7 @@ int main(int argc, char** argv) {
     }
 
     {
-        ClockView clock_view(renderer, font_time, font_date, font_info, &store);
+        ClockView clock_view(renderer, font_time, font_date, font_info, &store, config.sprite_dir);
         CalendarView calendar_view(renderer, font_header, font_day, font_agenda, &store);
 
         enum class ViewMode { Clock, Calendar };
@@ -275,6 +282,7 @@ int main(int argc, char** argv) {
 
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
+    IMG_Quit();
     TTF_Quit();
     SDL_Quit();
 

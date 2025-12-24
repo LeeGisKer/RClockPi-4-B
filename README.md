@@ -8,7 +8,7 @@ Fullscreen smart clock + calendar for Raspberry Pi OS using SDL2 + SDL2_ttf.
 sudo apt update
 sudo apt install -y \
   build-essential cmake pkg-config \
-  libsdl2-dev libsdl2-ttf-dev \
+  libsdl2-dev libsdl2-ttf-dev libsdl2-image-dev \
   libcurl4-openssl-dev libsqlite3-dev \
   nlohmann-json3-dev \
   ca-certificates \
@@ -76,6 +76,7 @@ Edit `config/config.json`:
 - `idle_threshold_sec`, `auto_cycle_clock_sec`, `auto_cycle_calendar_sec`: idle auto-cycle timing
 - `sync_interval_sec`, `time_window_days`: sync behavior
 - `ics_url`: secret iCal (ICS) URL to sync your calendar (required for live data)
+- `sprite_dir`: folder for time-of-day sprites (default `./assets/sprites`)
 - Keep `ics_url` private; it grants read access to the calendar.
 
 ## Using a secret iCal (ICS) URL

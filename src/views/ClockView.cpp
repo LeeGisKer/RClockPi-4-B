@@ -11,6 +11,8 @@
 #include <string>
 #include <vector>
 
+#include <SDL_image.h>
+
 namespace {
 
 struct ClockLayout {
@@ -187,13 +189,27 @@ std::string SyncStatusLabel(EventStore* store, int64_t now_ts) {
     return label + " (" + std::to_string(minutes) + "m)";
 }
 
+std::string JoinPath(const std::string& dir, const std::string& file) {
+    if (dir.empty()) {
+        return file;
+    }
+    char last = dir.back();
+    if (last == '/' || last == '\\') {
+        return dir + file;
+    }
+    return dir + "/" + file;
+}
+
 } // namespace
 
-ClockView::ClockView(SDL_Renderer* renderer, TTF_Font* time_font, TTF_Font* date_font, TTF_Font* info_font, EventStore* store)
-    : renderer_(renderer), time_font_(time_font), date_font_(date_font), info_font_(info_font), store_(store) {}
+ClockView::ClockView(SDL_Renderer* renderer, TTF_Font* time_font, TTF_Font* date_font, TTF_Font* info_font, EventStore* store, const std::string& sprite_dir)
+    : renderer_(renderer), time_font_(time_font), date_font_(date_font), info_font_(info_font), store_(store), sprite_dir_(sprite_dir) {
+    LoadSprites();
+}
 
 ClockView::~ClockView() {
     ClearCache();
+    ClearSprites();
 }
 
 void ClockView::UpdateText(CachedText& cache, TTF_Font* font, const std::string& text, SDL_Color color) {
@@ -228,6 +244,100 @@ void ClockView::ClearCache() {
     for (auto& item : cell_values_) {
         destroy(item);
     }
+}
+
+void ClockView::LoadSprites() {
+    sprites_loaded_ = false;
+    if (sprite_dir_.empty()) {
+        return;
+    }
+
+    std::array<std::string, static_cast<size_t>(SpriteKind::Count)> names = {
+        "Midnight.png",
+        "Sunrise.png",
+        "Sun.png",
+        "Sunset.png",
+        "Moon.png"
+    };
+
+    for (size_t i = 0; i < names.size(); ++i) {
+        std::string path = JoinPath(sprite_dir_, names[i]);
+        SDL_Surface* surface = IMG_Load(path.c_str());
+        if (!surface) {
+            std::cerr << "Sprite load failed: " << path << " - " << IMG_GetError() << "\n";
+            continue;
+        }
+        SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer_, surface);
+        if (!tex) {
+            std::cerr << "Sprite texture failed: " << path << " - " << SDL_GetError() << "\n";
+            SDL_FreeSurface(surface);
+            continue;
+        }
+        sprites_[i].texture = tex;
+        sprites_[i].w = surface->w;
+        sprites_[i].h = surface->h;
+        SDL_FreeSurface(surface);
+        sprites_loaded_ = true;
+    }
+}
+
+void ClockView::ClearSprites() {
+    for (auto& sprite : sprites_) {
+        if (sprite.texture) {
+            SDL_DestroyTexture(sprite.texture);
+            sprite.texture = nullptr;
+        }
+        sprite.w = 0;
+        sprite.h = 0;
+    }
+    sprites_loaded_ = false;
+}
+
+ClockView::SpriteKind ClockView::SpriteForHour(int hour) const {
+    if (hour < 5) {
+        return SpriteKind::Midnight;
+    }
+    if (hour < 8) {
+        return SpriteKind::Sunrise;
+    }
+    if (hour < 17) {
+        return SpriteKind::Sun;
+    }
+    if (hour < 20) {
+        return SpriteKind::Sunset;
+    }
+    return SpriteKind::Moon;
+}
+
+bool ClockView::DrawSpriteForHour(int hour, const SDL_Rect& area) {
+    if (!sprites_loaded_) {
+        return false;
+    }
+    SpriteKind kind = SpriteForHour(hour);
+    const auto& sprite = sprites_[static_cast<size_t>(kind)];
+    if (!sprite.texture || sprite.w <= 0 || sprite.h <= 0) {
+        return false;
+    }
+
+    int pad = std::max(8, area.w / 12);
+    int max_w = area.w - pad * 2;
+    int max_h = area.h - pad * 2;
+    if (max_w <= 0 || max_h <= 0) {
+        return false;
+    }
+
+    float scale = std::min(static_cast<float>(max_w) / sprite.w, static_cast<float>(max_h) / sprite.h);
+    int draw_w = static_cast<int>(std::round(sprite.w * scale));
+    int draw_h = static_cast<int>(std::round(sprite.h * scale));
+
+    SDL_Rect dst{
+        area.x + (area.w - draw_w) / 2,
+        area.y + (area.h - draw_h) / 2,
+        draw_w,
+        draw_h
+    };
+    SDL_RenderCopy(renderer_, sprite.texture, nullptr, &dst);
+    return true;
 }
 
 void ClockView::UpdateCache(int width, int height, int64_t now_ts) {
@@ -319,11 +429,14 @@ void ClockView::Render(int width, int height) {
     SDL_RenderDrawLine(renderer_, layout.panel.x + layout.left_w, layout.top_y, layout.panel.x + layout.left_w, layout.divider_y);
     SDL_RenderDrawLine(renderer_, layout.panel.x + layout.left_w + layout.center_w, layout.top_y, layout.panel.x + layout.left_w + layout.center_w, layout.divider_y);
 
-    int icon_cx = layout.panel.x + layout.left_w / 2;
-    int icon_cy = layout.top_y + layout.top_h / 2;
-    int radius = std::min(layout.left_w, layout.top_h) / 4;
     std::tm now_tm = TimeUtil::LocalTime(now_ts);
-    DrawClockIcon(renderer_, icon_cx, icon_cy, radius, now_tm.tm_hour, now_tm.tm_min, now_tm.tm_sec);
+    SDL_Rect left_area{ layout.panel.x, layout.top_y, layout.left_w, layout.top_h };
+    if (!DrawSpriteForHour(now_tm.tm_hour, left_area)) {
+        int icon_cx = layout.panel.x + layout.left_w / 2;
+        int icon_cy = layout.top_y + layout.top_h / 2;
+        int radius = std::min(layout.left_w, layout.top_h) / 4;
+        DrawClockIcon(renderer_, icon_cx, icon_cy, radius, now_tm.tm_hour, now_tm.tm_min, now_tm.tm_sec);
+    }
 
     if (date_text_.texture) {
         int date_x = layout.panel.x + layout.left_w + (layout.center_w - date_text_.w) / 2;

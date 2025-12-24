@@ -8,6 +8,7 @@ find_package(PkgConfig REQUIRED)
 
 pkg_check_modules(SDL2 REQUIRED sdl2)
 pkg_check_modules(SDL2_TTF REQUIRED SDL2_ttf)
+pkg_check_modules(SDL2_IMAGE REQUIRED SDL2_image)
 
 find_package(SQLite3 REQUIRED)
 find_package(CURL REQUIRED)
@@ -24,6 +25,7 @@ add_executable(rpi_calendar
 target_include_directories(rpi_calendar PRIVATE
     ${SDL2_INCLUDE_DIRS}
     ${SDL2_TTF_INCLUDE_DIRS}
+    ${SDL2_IMAGE_INCLUDE_DIRS}
     ${SQLite3_INCLUDE_DIRS}
     ${CURL_INCLUDE_DIRS}
     ${CMAKE_CURRENT_SOURCE_DIR}/src
@@ -32,6 +34,7 @@ target_include_directories(rpi_calendar PRIVATE
 target_link_libraries(rpi_calendar PRIVATE
     ${SDL2_LIBRARIES}
     ${SDL2_TTF_LIBRARIES}
+    ${SDL2_IMAGE_LIBRARIES}
     SQLite::SQLite3
     CURL::libcurl
 )
