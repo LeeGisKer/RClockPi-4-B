@@ -5,6 +5,8 @@
 #include <thread>
 #include <vector>
 
+class EventStore;
+
 struct SyncConfig {
     std::string db_path;
     std::string token_path;
