@@ -27,6 +27,9 @@ struct AppConfig {
     std::string db_path = "./data/calendar.db";
     std::string token_path = "./config/token.json";
     bool mock_mode = true;
+    std::string ics_url;
+    std::string client_id;
+    std::string client_secret;
 };
 
 bool LoadConfig(const std::string& path, AppConfig* out) {
@@ -54,6 +57,9 @@ bool LoadConfig(const std::string& path, AppConfig* out) {
     out->db_path = j.value("db_path", out->db_path);
     out->token_path = j.value("token_path", out->token_path);
     out->mock_mode = j.value("mock_mode", out->mock_mode);
+    out->ics_url = j.value("ics_url", out->ics_url);
+    out->client_id = j.value("client_id", out->client_id);
+    out->client_secret = j.value("client_secret", out->client_secret);
 
     return true;
 }
@@ -84,6 +90,9 @@ int main(int argc, char** argv) {
     sync_config.sync_interval_sec = config.sync_interval_sec;
     sync_config.time_window_days = config.time_window_days;
     sync_config.mock_mode = config.mock_mode;
+    sync_config.ics_url = config.ics_url;
+    sync_config.client_id = config.client_id;
+    sync_config.client_secret = config.client_secret;
 
     CalendarSyncService sync_service(sync_config);
     sync_service.Start();
@@ -146,125 +155,127 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    ClockView clock_view(renderer, font_time, font_date, font_info, &store);
-    CalendarView calendar_view(renderer, font_header, font_day, font_agenda, &store);
+    {
+        ClockView clock_view(renderer, font_time, font_date, font_info, &store);
+        CalendarView calendar_view(renderer, font_header, font_day, font_agenda, &store);
 
-    enum class ViewMode { Clock, Calendar };
-    ViewMode current_view = ViewMode::Clock;
+        enum class ViewMode { Clock, Calendar };
+        ViewMode current_view = ViewMode::Clock;
 
-    auto last_input = std::chrono::steady_clock::now();
-    bool auto_cycle = false;
-    auto auto_cycle_start = last_input;
-    bool capture_next_frame = false;
+        auto last_input = std::chrono::steady_clock::now();
+        bool auto_cycle = false;
+        auto auto_cycle_start = last_input;
+        bool capture_next_frame = false;
 
-    bool running = true;
-    while (running) {
-        SDL_Event ev;
-        while (SDL_PollEvent(&ev)) {
-            if (ev.type == SDL_QUIT) {
-                running = false;
-            } else if (ev.type == SDL_KEYDOWN) {
-                last_input = std::chrono::steady_clock::now();
-                auto_cycle = false;
+        bool running = true;
+        while (running) {
+            SDL_Event ev;
+            while (SDL_PollEvent(&ev)) {
+                if (ev.type == SDL_QUIT) {
+                    running = false;
+                } else if (ev.type == SDL_KEYDOWN) {
+                    last_input = std::chrono::steady_clock::now();
+                    auto_cycle = false;
 
-                switch (ev.key.keysym.sym) {
-                    case SDLK_ESCAPE:
-                        running = false;
-                        break;
-                    case SDLK_SPACE:
-                        current_view = (current_view == ViewMode::Clock) ? ViewMode::Calendar : ViewMode::Clock;
-                        break;
-                    case SDLK_s:
-                        capture_next_frame = true;
-                        break;
-                    case SDLK_LEFT:
-                        if (current_view == ViewMode::Calendar) {
-                            calendar_view.MoveSelectionDays(-1);
-                        }
-                        break;
-                    case SDLK_RIGHT:
-                        if (current_view == ViewMode::Calendar) {
-                            calendar_view.MoveSelectionDays(1);
-                        }
-                        break;
-                    case SDLK_UP:
-                        if (current_view == ViewMode::Calendar) {
-                            calendar_view.MoveSelectionDays(-7);
-                        }
-                        break;
-                    case SDLK_DOWN:
-                        if (current_view == ViewMode::Calendar) {
-                            calendar_view.MoveSelectionDays(7);
-                        }
-                        break;
-                    case SDLK_n:
-                        if (current_view == ViewMode::Calendar) {
-                            calendar_view.MoveMonth(1);
-                        }
-                        break;
-                    case SDLK_m:
-                        if (current_view == ViewMode::Calendar) {
-                            calendar_view.MoveMonth(-1);
-                        }
-                        break;
-                    case SDLK_t:
-                        if (current_view == ViewMode::Calendar) {
-                            calendar_view.JumpToToday();
-                        }
-                        break;
-                    default:
-                        break;
+                    switch (ev.key.keysym.sym) {
+                        case SDLK_ESCAPE:
+                            running = false;
+                            break;
+                        case SDLK_SPACE:
+                            current_view = (current_view == ViewMode::Clock) ? ViewMode::Calendar : ViewMode::Clock;
+                            break;
+                        case SDLK_s:
+                            capture_next_frame = true;
+                            break;
+                        case SDLK_LEFT:
+                            if (current_view == ViewMode::Calendar) {
+                                calendar_view.MoveSelectionDays(-1);
+                            }
+                            break;
+                        case SDLK_RIGHT:
+                            if (current_view == ViewMode::Calendar) {
+                                calendar_view.MoveSelectionDays(1);
+                            }
+                            break;
+                        case SDLK_UP:
+                            if (current_view == ViewMode::Calendar) {
+                                calendar_view.MoveSelectionDays(-7);
+                            }
+                            break;
+                        case SDLK_DOWN:
+                            if (current_view == ViewMode::Calendar) {
+                                calendar_view.MoveSelectionDays(7);
+                            }
+                            break;
+                        case SDLK_n:
+                            if (current_view == ViewMode::Calendar) {
+                                calendar_view.MoveMonth(1);
+                            }
+                            break;
+                        case SDLK_m:
+                            if (current_view == ViewMode::Calendar) {
+                                calendar_view.MoveMonth(-1);
+                            }
+                            break;
+                        case SDLK_t:
+                            if (current_view == ViewMode::Calendar) {
+                                calendar_view.JumpToToday();
+                            }
+                            break;
+                        default:
+                            break;
+                    }
                 }
             }
-        }
 
-        auto now = std::chrono::steady_clock::now();
-        auto idle_sec = std::chrono::duration_cast<std::chrono::seconds>(now - last_input).count();
-        if (!auto_cycle && idle_sec >= config.idle_threshold_sec) {
-            auto_cycle = true;
-            auto_cycle_start = now;
-            current_view = ViewMode::Clock;
-        }
-
-        if (auto_cycle) {
-            int cycle_total = config.auto_cycle_clock_sec + config.auto_cycle_calendar_sec;
-            if (cycle_total > 0) {
-                int elapsed = static_cast<int>(std::chrono::duration_cast<std::chrono::seconds>(now - auto_cycle_start).count());
-                int mod = elapsed % cycle_total;
-                current_view = (mod < config.auto_cycle_clock_sec) ? ViewMode::Clock : ViewMode::Calendar;
+            auto now = std::chrono::steady_clock::now();
+            auto idle_sec = std::chrono::duration_cast<std::chrono::seconds>(now - last_input).count();
+            if (!auto_cycle && idle_sec >= config.idle_threshold_sec) {
+                auto_cycle = true;
+                auto_cycle_start = now;
+                current_view = ViewMode::Clock;
             }
-        }
 
-        SDL_SetRenderDrawColor(renderer, 238, 236, 232, 255);
-        SDL_RenderClear(renderer);
-
-        int w = 0, h = 0;
-        SDL_GetRendererOutputSize(renderer, &w, &h);
-
-        if (current_view == ViewMode::Clock) {
-            clock_view.Render(w, h);
-        } else {
-            calendar_view.Render(w, h);
-        }
-
-        SDL_RenderPresent(renderer);
-
-        if (capture_next_frame) {
-            SDL_Surface* shot = SDL_CreateRGBSurfaceWithFormat(0, w, h, 32, SDL_PIXELFORMAT_ARGB8888);
-            if (shot) {
-                if (SDL_RenderReadPixels(renderer, nullptr, SDL_PIXELFORMAT_ARGB8888, shot->pixels, shot->pitch) == 0) {
-                    SDL_SaveBMP(shot, "data/preview.bmp");
-                } else {
-                    std::cerr << "SDL_RenderReadPixels failed: " << SDL_GetError() << "\n";
+            if (auto_cycle) {
+                int cycle_total = config.auto_cycle_clock_sec + config.auto_cycle_calendar_sec;
+                if (cycle_total > 0) {
+                    int elapsed = static_cast<int>(std::chrono::duration_cast<std::chrono::seconds>(now - auto_cycle_start).count());
+                    int mod = elapsed % cycle_total;
+                    current_view = (mod < config.auto_cycle_clock_sec) ? ViewMode::Clock : ViewMode::Calendar;
                 }
-                SDL_FreeSurface(shot);
+            }
+
+            SDL_SetRenderDrawColor(renderer, 238, 236, 232, 255);
+            SDL_RenderClear(renderer);
+
+            int w = 0, h = 0;
+            SDL_GetRendererOutputSize(renderer, &w, &h);
+
+            if (current_view == ViewMode::Clock) {
+                clock_view.Render(w, h);
             } else {
-                std::cerr << "SDL_CreateRGBSurfaceWithFormat failed: " << SDL_GetError() << "\n";
+                calendar_view.Render(w, h);
             }
-            capture_next_frame = false;
-        }
 
-        SDL_Delay(33);
+            SDL_RenderPresent(renderer);
+
+            if (capture_next_frame) {
+                SDL_Surface* shot = SDL_CreateRGBSurfaceWithFormat(0, w, h, 32, SDL_PIXELFORMAT_ARGB8888);
+                if (shot) {
+                    if (SDL_RenderReadPixels(renderer, nullptr, SDL_PIXELFORMAT_ARGB8888, shot->pixels, shot->pitch) == 0) {
+                        SDL_SaveBMP(shot, "data/preview.bmp");
+                    } else {
+                        std::cerr << "SDL_RenderReadPixels failed: " << SDL_GetError() << "\n";
+                    }
+                    SDL_FreeSurface(shot);
+                } else {
+                    std::cerr << "SDL_CreateRGBSurfaceWithFormat failed: " << SDL_GetError() << "\n";
+                }
+                capture_next_frame = false;
+            }
+
+            SDL_Delay(33);
+        }
     }
 
     sync_service.Stop();

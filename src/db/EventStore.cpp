@@ -167,7 +167,7 @@ std::vector<EventRecord> EventStore::GetEventsForDay(int64_t day_ts) {
 
     const char* sql =
         "SELECT id, calendar_id, title, start_ts, end_ts, all_day, location, updated_ts, status"
-        " FROM events WHERE start_ts >= ? AND start_ts <= ? AND status != 'cancelled'"
+        " FROM events WHERE start_ts <= ? AND end_ts >= ? AND status != 'cancelled'"
         " ORDER BY start_ts ASC";
 
     auto stmt = Prepare(db_, sql);
@@ -175,8 +175,8 @@ std::vector<EventRecord> EventStore::GetEventsForDay(int64_t day_ts) {
         return out;
     }
 
-    sqlite3_bind_int64(stmt.get(), 1, start);
-    sqlite3_bind_int64(stmt.get(), 2, end);
+    sqlite3_bind_int64(stmt.get(), 1, end);
+    sqlite3_bind_int64(stmt.get(), 2, start);
 
     while (sqlite3_step(stmt.get()) == SQLITE_ROW) {
         EventRecord ev;

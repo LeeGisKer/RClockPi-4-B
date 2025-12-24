@@ -5,6 +5,10 @@
 #include <fstream>
 #include <iostream>
 
+#ifndef _WIN32
+#include <sys/stat.h>
+#endif
+
 bool OAuthTokenStore::LoadFromFile(const std::string& path, TokenInfo* out) {
     std::ifstream file(path);
     if (!file.is_open()) {
@@ -40,5 +44,12 @@ bool OAuthTokenStore::SaveToFile(const std::string& path, const TokenInfo& info)
         return false;
     }
     file << j.dump(2);
+    file.close();
+
+#ifndef _WIN32
+    if (chmod(path.c_str(), 0600) != 0) {
+        std::cerr << "Warning: failed to set token file permissions on " << path << "\n";
+    }
+#endif
     return true;
 }

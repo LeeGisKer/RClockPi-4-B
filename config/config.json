@@ -8,5 +8,8 @@
   "font_path": "../assets/Minecraft.ttf",
   "db_path": "./data/calendar.db",
   "token_path": "./config/token.json",
-  "mock_mode": true
+  "mock_mode": false,
+  "ics_url": "https://calendar.google.com/calendar/ical/ax2gil8%40gmail.com/public/basic.ics",
+  "client_id": "",
+  "client_secret": ""
 }

@@ -8,10 +8,13 @@
 struct SyncConfig {
     std::string db_path;
     std::string token_path;
+    std::string ics_url;
     std::vector<std::string> calendar_ids;
     int sync_interval_sec = 120;
     int time_window_days = 14;
     bool mock_mode = false;
+    std::string client_id;
+    std::string client_secret;
 };
 
 class CalendarSyncService {
@@ -25,7 +28,7 @@ public:
 
 private:
     void Run();
-    bool SyncOnce();
+    bool SyncOnce(EventStore* store);
 
     SyncConfig config_;
     std::atomic<bool> running_{false};
