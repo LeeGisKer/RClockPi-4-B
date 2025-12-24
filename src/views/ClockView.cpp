@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -113,10 +114,21 @@ void DrawCircle(SDL_Renderer* renderer, int cx, int cy, int radius) {
     }
 }
 
-void DrawClockIcon(SDL_Renderer* renderer, int cx, int cy, int radius) {
+void DrawClockIcon(SDL_Renderer* renderer, int cx, int cy, int radius, int hour, int minute, int second) {
+    constexpr double kPi = 3.14159265358979323846;
     DrawCircle(renderer, cx, cy, radius);
-    SDL_RenderDrawLine(renderer, cx, cy, cx, cy - radius + 6);
-    SDL_RenderDrawLine(renderer, cx, cy, cx + radius - 6, cy);
+    double minute_angle = (minute + second / 60.0) * 6.0;
+    double hour_angle = ((hour % 12) + minute / 60.0) * 30.0;
+
+    auto draw_hand = [&](double angle_deg, int length) {
+        double rad = (angle_deg - 90.0) * kPi / 180.0;
+        int x = static_cast<int>(std::round(cx + std::cos(rad) * length));
+        int y = static_cast<int>(std::round(cy + std::sin(rad) * length));
+        SDL_RenderDrawLine(renderer, cx, cy, x, y);
+    };
+
+    draw_hand(hour_angle, radius - 10);
+    draw_hand(minute_angle, radius - 4);
 }
 
 std::string SyncStatusLabel(EventStore* store, int64_t now_ts) {
@@ -288,7 +300,8 @@ void ClockView::Render(int width, int height) {
     int icon_cx = layout.panel.x + layout.left_w / 2;
     int icon_cy = layout.top_y + layout.top_h / 2;
     int radius = std::min(layout.left_w, layout.top_h) / 4;
-    DrawClockIcon(renderer_, icon_cx, icon_cy, radius);
+    std::tm now_tm = TimeUtil::LocalTime(now_ts);
+    DrawClockIcon(renderer_, icon_cx, icon_cy, radius, now_tm.tm_hour, now_tm.tm_min, now_tm.tm_sec);
 
     if (date_text_.texture) {
         int date_x = layout.panel.x + layout.left_w + (layout.center_w - date_text_.w) / 2;
