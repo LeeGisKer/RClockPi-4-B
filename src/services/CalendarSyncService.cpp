@@ -1,13 +1,9 @@
 #include "services/CalendarSyncService.h"
 
-#include "auth/OAuthTokenStore.h"
 #include "db/EventStore.h"
 #include "util/TimeUtil.h"
 
 #include <curl/curl.h>
-#include <nlohmann/json.hpp>
-
-#include <algorithm>
 #include <chrono>
 #include <cctype>
 #include <ctime>
@@ -28,41 +24,6 @@ size_t WriteCallback(void* ptr, size_t size, size_t nmemb, void* userdata) {
     auto* out = static_cast<std::string*>(userdata);
     out->append(static_cast<const char*>(ptr), total);
     return total;
-}
-
-std::string UrlEncode(CURL* curl, const std::string& value) {
-    char* escaped = curl_easy_escape(curl, value.c_str(), static_cast<int>(value.size()));
-    if (!escaped) {
-        return "";
-    }
-    std::string out = escaped;
-    curl_free(escaped);
-    return out;
-}
-
-bool HttpPostForm(CURL* curl, const std::string& url, const std::string& form_body, HttpResponse* out) {
-    out->body.clear();
-    out->code = 0;
-
-    curl_easy_reset(curl);
-    curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
-    curl_easy_setopt(curl, CURLOPT_POST, 1L);
-    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, form_body.c_str());
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &out->body);
-    curl_easy_setopt(curl, CURLOPT_USERAGENT, "rpi-calendar/1.0");
-    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 15L);
-    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
-    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
-    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-
-    CURLcode res = curl_easy_perform(curl);
-    if (res != CURLE_OK) {
-        std::cerr << "HTTP POST failed: " << curl_easy_strerror(res) << "\n";
-        return false;
-    }
-    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &out->code);
-    return true;
 }
 
 bool HttpGet(CURL* curl, const std::string& url, const std::vector<std::string>& headers, HttpResponse* out) {
@@ -434,188 +395,6 @@ bool FetchIcsEvents(CURL* curl, const SyncConfig& config, EventStore* store, std
     return true;
 }
 
-bool RefreshAccessToken(CURL* curl, const SyncConfig& config, TokenInfo* token) {
-    if (config.client_id.empty() || config.client_secret.empty() || token->refresh_token.empty()) {
-        std::cerr << "Missing OAuth client_id, client_secret, or refresh_token.\n";
-        return false;
-    }
-
-    std::ostringstream form;
-    form << "client_id=" << UrlEncode(curl, config.client_id)
-         << "&client_secret=" << UrlEncode(curl, config.client_secret)
-         << "&refresh_token=" << UrlEncode(curl, token->refresh_token)
-         << "&grant_type=refresh_token";
-
-    HttpResponse resp;
-    if (!HttpPostForm(curl, "https://oauth2.googleapis.com/token", form.str(), &resp)) {
-        return false;
-    }
-
-    if (resp.code != 200) {
-        std::cerr << "Token refresh failed (HTTP " << resp.code << ")\n";
-        return false;
-    }
-
-    nlohmann::json j = nlohmann::json::parse(resp.body, nullptr, false);
-    if (j.is_discarded()) {
-        std::cerr << "Token refresh response parse failed.\n";
-        return false;
-    }
-
-    token->access_token = j.value("access_token", "");
-    token->token_type = j.value("token_type", "Bearer");
-    int expires_in = j.value("expires_in", 0);
-    token->expiry_ts = TimeUtil::NowTs() + std::max(0, expires_in - 30);
-
-    if (token->access_token.empty()) {
-        std::cerr << "Token refresh response missing access_token.\n";
-        return false;
-    }
-
-    return OAuthTokenStore::SaveToFile(config.token_path, *token);
-}
-
-bool ParseEventItem(const nlohmann::json& item, const std::string& calendar_id, EventRecord* out) {
-    if (!item.contains("id")) {
-        return false;
-    }
-
-    out->id = item.value("id", "");
-    out->calendar_id = calendar_id;
-    out->title = item.value("summary", "(No title)");
-    out->location = item.value("location", "");
-    out->status = item.value("status", "");
-
-    std::string updated = item.value("updated", "");
-    time_t updated_ts = 0;
-    if (!updated.empty()) {
-        TimeUtil::ParseRfc3339(updated, &updated_ts);
-    }
-    out->updated_ts = updated_ts;
-
-    if (!item.contains("start")) {
-        return false;
-    }
-
-    const auto& start = item["start"];
-    const auto& end = item.contains("end") ? item["end"] : nlohmann::json{};
-
-    out->all_day = false;
-    if (start.contains("dateTime")) {
-        std::string start_dt = start.value("dateTime", "");
-        time_t start_ts = 0;
-        if (!TimeUtil::ParseRfc3339(start_dt, &start_ts)) {
-            return false;
-        }
-        out->start_ts = static_cast<int64_t>(start_ts);
-        if (end.contains("dateTime")) {
-            std::string end_dt = end.value("dateTime", "");
-            time_t end_ts = 0;
-            if (TimeUtil::ParseRfc3339(end_dt, &end_ts)) {
-                out->end_ts = static_cast<int64_t>(end_ts);
-            } else {
-                out->end_ts = out->start_ts;
-            }
-        } else {
-            out->end_ts = out->start_ts;
-        }
-    } else if (start.contains("date")) {
-        std::string start_date = start.value("date", "");
-        time_t start_ts = 0;
-        if (!TimeUtil::ParseDateLocal(start_date, &start_ts)) {
-            return false;
-        }
-        out->start_ts = start_ts;
-        out->all_day = true;
-        if (end.contains("date")) {
-            std::string end_date = end.value("date", "");
-            time_t end_ts = 0;
-            if (TimeUtil::ParseDateLocal(end_date, &end_ts)) {
-                out->end_ts = end_ts;
-            } else {
-                out->end_ts = start_ts + 24 * 60 * 60;
-            }
-        } else {
-            out->end_ts = start_ts + 24 * 60 * 60;
-        }
-    } else {
-        return false;
-    }
-
-    if (out->end_ts < out->start_ts) {
-        out->end_ts = out->start_ts;
-    }
-
-    return true;
-}
-
-bool FetchCalendarEvents(CURL* curl, const SyncConfig& config, const std::string& calendar_id, const std::string& access_token, EventStore* store, bool* unauthorized) {
-    if (unauthorized) {
-        *unauthorized = false;
-    }
-    std::string time_min = TimeUtil::ToRfc3339Utc(TimeUtil::NowTs());
-    std::string time_max = TimeUtil::ToRfc3339Utc(TimeUtil::NowTs() + config.time_window_days * 24 * 60 * 60);
-
-    std::string base = "https://www.googleapis.com/calendar/v3/calendars/" + UrlEncode(curl, calendar_id) + "/events";
-    std::string page_token;
-
-    while (true) {
-        std::ostringstream url;
-        url << base << "?singleEvents=true&orderBy=startTime&maxResults=2500"
-            << "&timeMin=" << UrlEncode(curl, time_min)
-            << "&timeMax=" << UrlEncode(curl, time_max)
-            << "&showDeleted=true";
-        if (!page_token.empty()) {
-            url << "&pageToken=" << UrlEncode(curl, page_token);
-        }
-
-        std::vector<std::string> headers;
-        headers.push_back("Authorization: Bearer " + access_token);
-
-        HttpResponse resp;
-        if (!HttpGet(curl, url.str(), headers, &resp)) {
-            return false;
-        }
-        if (resp.code == 401) {
-            if (unauthorized) {
-                *unauthorized = true;
-            }
-            return false;
-        }
-        if (resp.code != 200) {
-            std::cerr << "Events fetch failed (HTTP " << resp.code << ")\n";
-            return false;
-        }
-
-        nlohmann::json j = nlohmann::json::parse(resp.body, nullptr, false);
-        if (j.is_discarded()) {
-            std::cerr << "Events response parse failed.\n";
-            return false;
-        }
-
-        if (j.contains("items") && j["items"].is_array()) {
-            for (const auto& item : j["items"]) {
-                EventRecord ev;
-                if (!ParseEventItem(item, calendar_id, &ev)) {
-                    continue;
-                }
-                store->UpsertEvent(ev);
-            }
-        }
-
-        if (j.contains("nextPageToken")) {
-            page_token = j.value("nextPageToken", "");
-            if (page_token.empty()) {
-                break;
-            }
-        } else {
-            break;
-        }
-    }
-
-    return true;
-}
-
 } // namespace
 
 CalendarSyncService::CalendarSyncService(const SyncConfig& config) : config_(config) {}
@@ -726,80 +505,8 @@ bool CalendarSyncService::SyncOnce(EventStore* store, std::string* error) {
         return ok;
     }
 
-    if (config_.client_id.empty() || config_.client_secret.empty()) {
-        std::cerr << "OAuth not configured. Set ics_url or provide client_id/client_secret.\n";
-        if (error) {
-            *error = "oauth not configured";
-        }
-        return false;
+    if (error) {
+        *error = "ics_url empty";
     }
-
-    TokenInfo token;
-    if (!OAuthTokenStore::LoadFromFile(config_.token_path, &token)) {
-        if (error) {
-            *error = "token load failed";
-        }
-        return false;
-    }
-
-    if (token.refresh_token.empty()) {
-        std::cerr << "Refresh token missing in token.json\n";
-        if (error) {
-            *error = "refresh token missing";
-        }
-        return false;
-    }
-
-    int64_t now_ts = TimeUtil::NowTs();
-    bool need_refresh = token.access_token.empty() || token.expiry_ts <= now_ts + 60;
-
-    CURL* curl = curl_easy_init();
-    if (!curl) {
-        std::cerr << "libcurl init failed\n";
-        if (error) {
-            *error = "curl init failed";
-        }
-        return false;
-    }
-
-    bool ok = true;
-    if (need_refresh) {
-        ok = RefreshAccessToken(curl, config_, &token);
-        if (!ok && error) {
-            *error = "token refresh failed";
-        }
-    }
-
-    if (ok) {
-        for (const auto& calendar_id : config_.calendar_ids) {
-            bool unauthorized = false;
-            if (!FetchCalendarEvents(curl, config_, calendar_id, token.access_token, store, &unauthorized)) {
-                if (unauthorized) {
-                    if (!RefreshAccessToken(curl, config_, &token)) {
-                        if (error) {
-                            *error = "token refresh failed";
-                        }
-                        ok = false;
-                        break;
-                    }
-                    if (!FetchCalendarEvents(curl, config_, calendar_id, token.access_token, store, nullptr)) {
-                        if (error) {
-                            *error = "events fetch failed";
-                        }
-                        ok = false;
-                        break;
-                    }
-                } else {
-                    if (error) {
-                        *error = "events fetch failed";
-                    }
-                    ok = false;
-                    break;
-                }
-            }
-        }
-    }
-
-    curl_easy_cleanup(curl);
-    return ok;
+    return false;
 }

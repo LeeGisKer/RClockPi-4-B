@@ -3,7 +3,6 @@
 
 #include <nlohmann/json.hpp>
 
-#include "auth/OAuthTokenStore.h"
 #include "db/EventStore.h"
 #include "services/CalendarSyncService.h"
 #include "util/TimeUtil.h"
@@ -14,10 +13,8 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
-#include <vector>
 
 struct AppConfig {
-    std::vector<std::string> calendar_ids{ "primary" };
     int sync_interval_sec = 120;
     int time_window_days = 14;
     int idle_threshold_sec = 30;
@@ -25,11 +22,8 @@ struct AppConfig {
     int auto_cycle_calendar_sec = 40;
     std::string font_path = "./assets/DejaVuSans.ttf";
     std::string db_path = "./data/calendar.db";
-    std::string token_path = "./config/token.json";
     bool mock_mode = true;
     std::string ics_url;
-    std::string client_id;
-    std::string client_secret;
 };
 
 bool LoadConfig(const std::string& path, AppConfig* out) {
@@ -47,7 +41,6 @@ bool LoadConfig(const std::string& path, AppConfig* out) {
         return false;
     }
 
-    out->calendar_ids = j.value("calendar_ids", out->calendar_ids);
     out->sync_interval_sec = j.value("sync_interval_sec", out->sync_interval_sec);
     out->time_window_days = j.value("time_window_days", out->time_window_days);
     out->idle_threshold_sec = j.value("idle_threshold_sec", out->idle_threshold_sec);
@@ -55,11 +48,8 @@ bool LoadConfig(const std::string& path, AppConfig* out) {
     out->auto_cycle_calendar_sec = j.value("auto_cycle_calendar_sec", out->auto_cycle_calendar_sec);
     out->font_path = j.value("font_path", out->font_path);
     out->db_path = j.value("db_path", out->db_path);
-    out->token_path = j.value("token_path", out->token_path);
     out->mock_mode = j.value("mock_mode", out->mock_mode);
     out->ics_url = j.value("ics_url", out->ics_url);
-    out->client_id = j.value("client_id", out->client_id);
-    out->client_secret = j.value("client_secret", out->client_secret);
 
     return true;
 }
@@ -85,14 +75,10 @@ int main(int argc, char** argv) {
 
     SyncConfig sync_config;
     sync_config.db_path = config.db_path;
-    sync_config.token_path = config.token_path;
-    sync_config.calendar_ids = config.calendar_ids;
     sync_config.sync_interval_sec = config.sync_interval_sec;
     sync_config.time_window_days = config.time_window_days;
     sync_config.mock_mode = config.mock_mode;
     sync_config.ics_url = config.ics_url;
-    sync_config.client_id = config.client_id;
-    sync_config.client_secret = config.client_secret;
 
     CalendarSyncService sync_service(sync_config);
     sync_service.Start();
