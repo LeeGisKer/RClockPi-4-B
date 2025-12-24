@@ -163,12 +163,12 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    TTF_Font* font_time = TTF_OpenFont(config.font_path.c_str(), 72);
-    TTF_Font* font_date = TTF_OpenFont(config.font_path.c_str(), 20);
-    TTF_Font* font_info = TTF_OpenFont(config.font_path.c_str(), 18);
-    TTF_Font* font_header = TTF_OpenFont(config.font_path.c_str(), 22);
-    TTF_Font* font_day = TTF_OpenFont(config.font_path.c_str(), 18);
-    TTF_Font* font_agenda = TTF_OpenFont(config.font_path.c_str(), 18);
+    TTF_Font* font_time = TTF_OpenFont(config.font_path.c_str(), 64);
+    TTF_Font* font_date = TTF_OpenFont(config.font_path.c_str(), 18);
+    TTF_Font* font_info = TTF_OpenFont(config.font_path.c_str(), 16);
+    TTF_Font* font_header = TTF_OpenFont(config.font_path.c_str(), 18);
+    TTF_Font* font_day = TTF_OpenFont(config.font_path.c_str(), 16);
+    TTF_Font* font_agenda = TTF_OpenFont(config.font_path.c_str(), 16);
 
     if (!font_time || !font_date || !font_info || !font_header || !font_day || !font_agenda) {
         std::cerr << "Failed to load font: " << config.font_path << "\n";

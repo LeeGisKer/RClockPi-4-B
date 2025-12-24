@@ -38,20 +38,20 @@ struct ClockLayout {
 
 ClockLayout ComputeLayout(int width, int height) {
     ClockLayout layout;
-    layout.margin = std::max(16, width / 25);
+    layout.margin = std::max(18, width / 28);
     layout.panel = { layout.margin, layout.margin, width - 2 * layout.margin, height - 2 * layout.margin };
     layout.top_h = static_cast<int>(layout.panel.h * 0.6f);
     layout.bottom_h = layout.panel.h - layout.top_h;
-    layout.left_w = static_cast<int>(layout.panel.w * 0.28f);
+    layout.left_w = static_cast<int>(layout.panel.w * 0.27f);
     layout.center_w = static_cast<int>(layout.panel.w * 0.42f);
     layout.right_w = layout.panel.w - layout.left_w - layout.center_w;
     layout.top_y = layout.panel.y;
     layout.divider_y = layout.panel.y + layout.top_h;
-    layout.right_x = layout.panel.x + layout.left_w + layout.center_w + 16;
-    layout.right_y = layout.top_y + 18;
-    layout.right_max_w = layout.right_w - 28;
-    layout.footer_h = 28;
-    layout.footer_max_w = layout.panel.w - 24;
+    layout.right_x = layout.panel.x + layout.left_w + layout.center_w + 20;
+    layout.right_y = layout.top_y + 16;
+    layout.right_max_w = layout.right_w - 36;
+    layout.footer_h = 24;
+    layout.footer_max_w = layout.panel.w - 32;
     layout.grid_h = layout.bottom_h - layout.footer_h;
     layout.grid_y = layout.divider_y;
     layout.row_h = layout.grid_h / 2;
@@ -319,7 +319,7 @@ bool ClockView::DrawSpriteForHour(int hour, const SDL_Rect& area) {
         return false;
     }
 
-    int pad = std::max(12, area.w / 6);
+    int pad = std::max(16, area.w / 5);
     int max_w = area.w - pad * 2;
     int max_h = area.h - pad * 2;
     if (max_w <= 0 || max_h <= 0) {
@@ -352,8 +352,8 @@ void ClockView::UpdateCache(int width, int height, int64_t now_ts) {
 
     ClockLayout layout = ComputeLayout(width, height);
 
-    SDL_Color fg = { 40, 40, 40, 255 };
-    SDL_Color dim = { 90, 90, 90, 255 };
+    SDL_Color fg = { 28, 28, 28, 255 };
+    SDL_Color dim = { 110, 110, 110, 255 };
 
     UpdateText(time_text_, time_font_, TimeUtil::FormatTimeHHMM(now_ts), fg);
     UpdateText(date_text_, date_font_, TimeUtil::FormatDateLine(now_ts), dim);
@@ -421,7 +421,7 @@ void ClockView::Render(int width, int height) {
 
     ClockLayout layout = ComputeLayout(width, height);
 
-    SDL_Color line = { 170, 170, 170, 255 };
+    SDL_Color line = { 200, 200, 200, 255 };
 
     SDL_SetRenderDrawColor(renderer_, line.r, line.g, line.b, 255);
     SDL_RenderDrawRect(renderer_, &layout.panel);
@@ -440,14 +440,14 @@ void ClockView::Render(int width, int height) {
 
     if (date_text_.texture) {
         int date_x = layout.panel.x + layout.left_w + (layout.center_w - date_text_.w) / 2;
-        int date_y = layout.top_y + 18;
+        int date_y = layout.top_y + 14;
         SDL_Rect dst{ date_x, date_y, date_text_.w, date_text_.h };
         SDL_RenderCopy(renderer_, date_text_.texture, nullptr, &dst);
     }
 
     if (time_text_.texture) {
         int time_x = layout.panel.x + layout.left_w + (layout.center_w - time_text_.w) / 2;
-        int time_y = layout.top_y + (layout.top_h - time_text_.h) / 2 + 10;
+        int time_y = layout.top_y + (layout.top_h - time_text_.h) / 2 + 6;
         SDL_Rect dst{ time_x, time_y, time_text_.w, time_text_.h };
         SDL_RenderCopy(renderer_, time_text_.texture, nullptr, &dst);
     }
@@ -459,7 +459,7 @@ void ClockView::Render(int width, int height) {
         }
         SDL_Rect dst{ layout.right_x, line_y, item.w, item.h };
         SDL_RenderCopy(renderer_, item.texture, nullptr, &dst);
-        line_y += item.h + 6;
+        line_y += item.h + 8;
     }
 
     SDL_SetRenderDrawColor(renderer_, line.r, line.g, line.b, 255);
@@ -467,8 +467,8 @@ void ClockView::Render(int width, int height) {
     SDL_RenderDrawLine(renderer_, layout.panel.x, layout.grid_y + layout.row_h, layout.panel.x + layout.panel.w, layout.grid_y + layout.row_h);
 
     auto draw_cell = [&](int col, int row, const CachedText& label, const CachedText& value) {
-        int cell_x = layout.panel.x + col * layout.col_w + 16;
-        int cell_y = layout.grid_y + row * layout.row_h + 10;
+        int cell_x = layout.panel.x + col * layout.col_w + 18;
+        int cell_y = layout.grid_y + row * layout.row_h + 8;
         if (label.texture) {
             SDL_Rect dst{ cell_x, cell_y, label.w, label.h };
             SDL_RenderCopy(renderer_, label.texture, nullptr, &dst);
@@ -485,7 +485,7 @@ void ClockView::Render(int width, int height) {
     draw_cell(1, 1, cell_labels_[3], cell_values_[3]);
 
     if (footer_text_.texture) {
-        SDL_Rect dst{ layout.panel.x + 12, layout.panel.y + layout.panel.h - footer_text_.h - 8, footer_text_.w, footer_text_.h };
+        SDL_Rect dst{ layout.panel.x + 16, layout.panel.y + layout.panel.h - footer_text_.h - 6, footer_text_.w, footer_text_.h };
         SDL_RenderCopy(renderer_, footer_text_.texture, nullptr, &dst);
     }
 }

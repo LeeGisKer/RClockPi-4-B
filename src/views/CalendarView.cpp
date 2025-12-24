@@ -26,7 +26,7 @@ struct CalendarLayout {
 
 CalendarLayout ComputeLayout(int width, int height) {
     CalendarLayout layout;
-    layout.margin = std::max(16, width / 25);
+    layout.margin = std::max(18, width / 28);
     layout.panel = { layout.margin, layout.margin, width - 2 * layout.margin, height - 2 * layout.margin };
     layout.top_bar_h = static_cast<int>(layout.panel.h * 0.12f);
     layout.grid_h = static_cast<int>(layout.panel.h * 0.56f);
@@ -35,7 +35,7 @@ CalendarLayout ComputeLayout(int width, int height) {
     layout.cell_w = layout.panel.w / 7;
     layout.cell_h = layout.grid_h / 6;
     layout.agenda_y = layout.grid_y + layout.grid_h;
-    layout.agenda_max_w = layout.panel.w - 32;
+    layout.agenda_max_w = layout.panel.w - 40;
     return layout;
 }
 
@@ -184,8 +184,8 @@ void CalendarView::UpdateCache(int width, int height, int64_t now_ts) {
     int64_t minute = now_ts / 60;
     bool minute_changed = minute != last_minute_;
 
-    SDL_Color fg = { 40, 40, 40, 255 };
-    SDL_Color dim = { 90, 90, 90, 255 };
+    SDL_Color fg = { 28, 28, 28, 255 };
+    SDL_Color dim = { 110, 110, 110, 255 };
 
     if (month_changed || size_changed) {
         UpdateText(month_text_, header_font_, TimeUtil::FormatMonthYear(selected_ts_), fg);
@@ -281,20 +281,20 @@ void CalendarView::Render(int width, int height) {
 
     CalendarLayout layout = ComputeLayout(width, height);
 
-    SDL_Color line = { 170, 170, 170, 255 };
-    SDL_Color accent = { 60, 60, 60, 255 };
-    SDL_Color highlight = { 210, 210, 210, 255 };
+    SDL_Color line = { 200, 200, 200, 255 };
+    SDL_Color accent = { 70, 70, 70, 255 };
+    SDL_Color highlight = { 245, 245, 245, 255 };
 
     SDL_SetRenderDrawColor(renderer_, line.r, line.g, line.b, 255);
     SDL_RenderDrawRect(renderer_, &layout.panel);
     SDL_RenderDrawLine(renderer_, layout.panel.x, layout.panel.y + layout.top_bar_h, layout.panel.x + layout.panel.w, layout.panel.y + layout.top_bar_h);
 
     if (month_text_.texture) {
-        SDL_Rect dst{ layout.panel.x + 16, layout.panel.y + (layout.top_bar_h - month_text_.h) / 2, month_text_.w, month_text_.h };
+        SDL_Rect dst{ layout.panel.x + 18, layout.panel.y + (layout.top_bar_h - month_text_.h) / 2, month_text_.w, month_text_.h };
         SDL_RenderCopy(renderer_, month_text_.texture, nullptr, &dst);
     }
     if (sync_text_.texture) {
-        SDL_Rect dst{ layout.panel.x + layout.panel.w - sync_text_.w - 16, layout.panel.y + (layout.top_bar_h - sync_text_.h) / 2, sync_text_.w, sync_text_.h };
+        SDL_Rect dst{ layout.panel.x + layout.panel.w - sync_text_.w - 18, layout.panel.y + (layout.top_bar_h - sync_text_.h) / 2, sync_text_.w, sync_text_.h };
         SDL_RenderCopy(renderer_, sync_text_.texture, nullptr, &dst);
     }
 
@@ -330,7 +330,7 @@ void CalendarView::Render(int width, int height) {
                 if (day - 1 < static_cast<int>(day_texts_.size())) {
                     const auto& day_cache = day_texts_[day - 1];
                     if (day_cache.texture) {
-                        SDL_Rect dst{ cell_x + 6, cell_y + 4, day_cache.w, day_cache.h };
+                        SDL_Rect dst{ cell_x + 7, cell_y + 5, day_cache.w, day_cache.h };
                         SDL_RenderCopy(renderer_, day_cache.texture, nullptr, &dst);
                     }
                 }
@@ -338,7 +338,7 @@ void CalendarView::Render(int width, int height) {
                 auto it = event_days_cache_.find(day);
                 if (it != event_days_cache_.end()) {
                     SDL_SetRenderDrawColor(renderer_, accent.r, accent.g, accent.b, 255);
-                    SDL_Rect dot{ cell_x + layout.cell_w - 10, cell_y + layout.cell_h - 10, 5, 5 };
+                    SDL_Rect dot{ cell_x + layout.cell_w - 9, cell_y + layout.cell_h - 9, 4, 4 };
                     SDL_RenderFillRect(renderer_, &dot);
                 }
 
@@ -348,14 +348,14 @@ void CalendarView::Render(int width, int height) {
     }
 
     SDL_Rect agenda_rect{ layout.panel.x, layout.agenda_y, layout.panel.w, layout.agenda_h };
-    SDL_SetRenderDrawColor(renderer_, 225, 222, 216, 255);
+    SDL_SetRenderDrawColor(renderer_, 248, 248, 248, 255);
     SDL_RenderFillRect(renderer_, &agenda_rect);
     SDL_SetRenderDrawColor(renderer_, line.r, line.g, line.b, 255);
     SDL_RenderDrawLine(renderer_, layout.panel.x, layout.agenda_y, layout.panel.x + layout.panel.w, layout.agenda_y);
 
     int line_y = layout.agenda_y + 8;
     if (agenda_title_.texture) {
-        SDL_Rect dst{ layout.panel.x + 16, line_y, agenda_title_.w, agenda_title_.h };
+        SDL_Rect dst{ layout.panel.x + 18, line_y, agenda_title_.w, agenda_title_.h };
         SDL_RenderCopy(renderer_, agenda_title_.texture, nullptr, &dst);
         line_y += agenda_title_.h + 6;
     }
@@ -364,13 +364,13 @@ void CalendarView::Render(int width, int height) {
         if (!line_cache.texture) {
             continue;
         }
-        SDL_Rect dst{ layout.panel.x + 16, line_y, line_cache.w, line_cache.h };
+        SDL_Rect dst{ layout.panel.x + 18, line_y, line_cache.w, line_cache.h };
         SDL_RenderCopy(renderer_, line_cache.texture, nullptr, &dst);
         line_y += line_cache.h + 6;
     }
 
     if (remaining_count_ > 0 && more_text_.texture) {
-        SDL_Rect dst{ layout.panel.x + 16, line_y, more_text_.w, more_text_.h };
+        SDL_Rect dst{ layout.panel.x + 18, line_y, more_text_.w, more_text_.h };
         SDL_RenderCopy(renderer_, more_text_.texture, nullptr, &dst);
     }
 }
