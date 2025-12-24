@@ -38,19 +38,19 @@ struct ClockLayout {
 
 ClockLayout ComputeLayout(int width, int height) {
     ClockLayout layout;
-    layout.margin = std::max(18, width / 28);
+    layout.margin = std::max(12, width / 32);
     layout.panel = { layout.margin, layout.margin, width - 2 * layout.margin, height - 2 * layout.margin };
     layout.top_h = static_cast<int>(layout.panel.h * 0.6f);
     layout.bottom_h = layout.panel.h - layout.top_h;
-    layout.left_w = static_cast<int>(layout.panel.w * 0.27f);
-    layout.center_w = static_cast<int>(layout.panel.w * 0.42f);
+    layout.left_w = static_cast<int>(layout.panel.w * 0.3f);
+    layout.center_w = static_cast<int>(layout.panel.w * 0.45f);
     layout.right_w = layout.panel.w - layout.left_w - layout.center_w;
     layout.top_y = layout.panel.y;
     layout.divider_y = layout.panel.y + layout.top_h;
     layout.right_x = layout.panel.x + layout.left_w + layout.center_w + 20;
     layout.right_y = layout.top_y + 16;
     layout.right_max_w = layout.right_w - 36;
-    layout.footer_h = 24;
+    layout.footer_h = 22;
     layout.footer_max_w = layout.panel.w - 32;
     layout.grid_h = layout.bottom_h - layout.footer_h;
     layout.grid_y = layout.divider_y;
@@ -351,7 +351,7 @@ bool ClockView::DrawSpriteForHour(int hour, const SDL_Rect& area) {
         return false;
     }
 
-    int pad = std::max(16, area.w / 5);
+    int pad = std::max(10, area.w / 8);
     int max_w = area.w - pad * 2;
     int max_h = area.h - pad * 2;
     if (max_w <= 0 || max_h <= 0) {
@@ -514,13 +514,38 @@ void ClockView::Render(int width, int height) {
         line_y += item.h + 8;
     }
 
+    std::array<int, 4> visible{};
+    int visible_count = 0;
+    for (int i = 0; i < 4; ++i) {
+        if (cell_labels_[i].texture || cell_values_[i].texture) {
+            visible[visible_count++] = i;
+        }
+    }
+
+    int cell_rows = 2;
+    int cell_cols = 2;
+    if (visible_count <= 2) {
+        cell_rows = 1;
+        cell_cols = std::max(1, visible_count);
+    }
+
+    int row_h = layout.grid_h / cell_rows;
+    int col_w = layout.panel.w / cell_cols;
+
     SDL_SetRenderDrawColor(renderer_, line.r, line.g, line.b, 255);
-    SDL_RenderDrawLine(renderer_, layout.panel.x + layout.col_w, layout.grid_y, layout.panel.x + layout.col_w, layout.grid_y + layout.grid_h);
-    SDL_RenderDrawLine(renderer_, layout.panel.x, layout.grid_y + layout.row_h, layout.panel.x + layout.panel.w, layout.grid_y + layout.row_h);
+    if (cell_cols == 2) {
+        SDL_RenderDrawLine(renderer_, layout.panel.x + col_w, layout.grid_y, layout.panel.x + col_w, layout.grid_y + layout.grid_h);
+    }
+    if (cell_rows == 2) {
+        SDL_RenderDrawLine(renderer_, layout.panel.x, layout.grid_y + row_h, layout.panel.x + layout.panel.w, layout.grid_y + row_h);
+    }
 
     auto draw_cell = [&](int col, int row, const CachedText& label, const CachedText& value) {
-        int cell_x = layout.panel.x + col * layout.col_w + 18;
-        int cell_y = layout.grid_y + row * layout.row_h + 8;
+        if (!label.texture && !value.texture) {
+            return;
+        }
+        int cell_x = layout.panel.x + col * col_w + 18;
+        int cell_y = layout.grid_y + row * row_h + 8;
         if (label.texture) {
             SDL_Rect dst{ cell_x, cell_y, label.w, label.h };
             SDL_RenderCopy(renderer_, label.texture, nullptr, &dst);
@@ -531,10 +556,17 @@ void ClockView::Render(int width, int height) {
         }
     };
 
-    draw_cell(0, 0, cell_labels_[0], cell_values_[0]);
-    draw_cell(1, 0, cell_labels_[1], cell_values_[1]);
-    draw_cell(0, 1, cell_labels_[2], cell_values_[2]);
-    draw_cell(1, 1, cell_labels_[3], cell_values_[3]);
+    if (cell_rows == 1) {
+        for (int i = 0; i < visible_count; ++i) {
+            int col = (cell_cols == 2) ? i : 0;
+            draw_cell(col, 0, cell_labels_[visible[i]], cell_values_[visible[i]]);
+        }
+    } else {
+        draw_cell(0, 0, cell_labels_[0], cell_values_[0]);
+        draw_cell(1, 0, cell_labels_[1], cell_values_[1]);
+        draw_cell(0, 1, cell_labels_[2], cell_values_[2]);
+        draw_cell(1, 1, cell_labels_[3], cell_values_[3]);
+    }
 
     if (footer_text_.texture) {
         SDL_Rect dst{ layout.panel.x + 16, layout.panel.y + layout.panel.h - footer_text_.h - 6, footer_text_.w, footer_text_.h };
