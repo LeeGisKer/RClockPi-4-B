@@ -75,21 +75,16 @@ Copy `config/config.example.json` to `config/config.json` and edit it:
 - `mock_mode`: `true` to seed sample events for UI testing
 - `idle_threshold_sec`, `auto_cycle_clock_sec`, `auto_cycle_calendar_sec`: idle auto-cycle timing
 - `sync_interval_sec`, `time_window_days`: sync behavior
+- `ics_url`: secret iCal (ICS) URL to sync your calendar (required for live data)
 - `sprite_dir`: folder for time-of-day sprites (default `./assets/sprites`)
 - `night_mode_enabled`, `night_start_hour`, `night_end_hour`, `night_dim_alpha`: dim the screen during night hours
-- `ICS_URL` environment variable is required and kept out of the repo.
+- Keep `ics_url` private; it grants read access to the calendar.
 
 ## Using a secret iCal (ICS) URL
 
 1) Copy your calendar's **secret iCal URL** from Google Calendar settings.
-2) Set `ICS_URL` as an environment variable (required).
+2) Set `ics_url` in `config/config.json`.
 3) Set `mock_mode` to `false`.
-
-Example:
-
-```bash
-ICS_URL="https://calendar.google.com/calendar/ical/.../basic.ics" ./rpi_calendar ../config/config.json
-```
 
 ## Mock mode
 
