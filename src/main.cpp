@@ -14,6 +14,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <cstdlib>
 
 namespace {
 
@@ -91,7 +92,6 @@ bool LoadConfig(const std::string& path, AppConfig* out) {
     out->font_path = j.value("font_path", out->font_path);
     out->db_path = j.value("db_path", out->db_path);
     out->mock_mode = j.value("mock_mode", out->mock_mode);
-    out->ics_url = j.value("ics_url", out->ics_url);
     out->sprite_dir = j.value("sprite_dir", out->sprite_dir);
 
     return true;
@@ -107,6 +107,13 @@ int main(int argc, char** argv) {
     if (!LoadConfig(config_path, &config)) {
         return 1;
     }
+
+    const char* env_ics = std::getenv("ICS_URL");
+    if (!env_ics || env_ics[0] == '\0') {
+        std::cerr << "ICS_URL is required. Set it in the environment before running.\n";
+        return 1;
+    }
+    config.ics_url = env_ics;
 
     std::filesystem::path config_abs = std::filesystem::absolute(config_path);
     config.font_path = ResolvePath(config_abs, config.font_path, true).string();
