@@ -330,7 +330,7 @@ ClockView::SpriteKind ClockView::SpriteForHour(int hour) const {
     if (hour < 5) {
         return SpriteKind::Midnight;
     }
-    if (hour < 8) {
+    if (hour < 12) {
         return SpriteKind::Sunrise;
     }
     if (hour < 17) {
