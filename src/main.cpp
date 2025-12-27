@@ -13,6 +13,7 @@
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <cstdlib>
 #include <iostream>
 
 namespace {
@@ -51,8 +52,6 @@ struct AppConfig {
     int sync_interval_sec = 120;
     int time_window_days = 14;
     int idle_threshold_sec = 30;
-    int auto_cycle_clock_sec = 1200;
-    int auto_cycle_calendar_sec = 1200;
     bool night_mode_enabled = true;
     int night_start_hour = 21;
     int night_end_hour = 6;
@@ -82,8 +81,6 @@ bool LoadConfig(const std::string& path, AppConfig* out) {
     out->sync_interval_sec = j.value("sync_interval_sec", out->sync_interval_sec);
     out->time_window_days = j.value("time_window_days", out->time_window_days);
     out->idle_threshold_sec = j.value("idle_threshold_sec", out->idle_threshold_sec);
-    out->auto_cycle_clock_sec = j.value("auto_cycle_clock_sec", out->auto_cycle_clock_sec);
-    out->auto_cycle_calendar_sec = j.value("auto_cycle_calendar_sec", out->auto_cycle_calendar_sec);
     out->night_mode_enabled = j.value("night_mode_enabled", out->night_mode_enabled);
     out->night_start_hour = j.value("night_start_hour", out->night_start_hour);
     out->night_end_hour = j.value("night_end_hour", out->night_end_hour);
@@ -91,7 +88,6 @@ bool LoadConfig(const std::string& path, AppConfig* out) {
     out->font_path = j.value("font_path", out->font_path);
     out->db_path = j.value("db_path", out->db_path);
     out->mock_mode = j.value("mock_mode", out->mock_mode);
-    out->ics_url = j.value("ics_url", out->ics_url);
     out->sprite_dir = j.value("sprite_dir", out->sprite_dir);
 
     return true;
@@ -107,6 +103,13 @@ int main(int argc, char** argv) {
     if (!LoadConfig(config_path, &config)) {
         return 1;
     }
+
+    const char* env_ics = std::getenv("ICS_URL");
+    if (!env_ics || env_ics[0] == '\0') {
+        std::cerr << "ICS_URL is required. Set it in the environment before running.\n";
+        return 1;
+    }
+    config.ics_url = env_ics;
 
     std::filesystem::path config_abs = std::filesystem::absolute(config_path);
     config.font_path = ResolvePath(config_abs, config.font_path, true).string();
@@ -201,8 +204,6 @@ int main(int argc, char** argv) {
         ViewMode current_view = ViewMode::Clock;
 
         auto last_input = std::chrono::steady_clock::now();
-        bool auto_cycle = false;
-        auto auto_cycle_start = last_input;
         bool capture_next_frame = false;
 
         bool running = true;
@@ -211,14 +212,8 @@ int main(int argc, char** argv) {
             while (SDL_PollEvent(&ev)) {
                 if (ev.type == SDL_QUIT) {
                     running = false;
-            } else if (ev.type == SDL_KEYDOWN) {
-                bool was_auto_cycle = auto_cycle;
-                last_input = std::chrono::steady_clock::now();
-                auto_cycle = false;
-                if (was_auto_cycle) {
-                    current_view = ViewMode::Clock;
-                }
-
+                } else if (ev.type == SDL_KEYDOWN) {
+                    last_input = std::chrono::steady_clock::now();
                     switch (ev.key.keysym.sym) {
                         case SDLK_ESCAPE:
                             running = false;
@@ -270,21 +265,11 @@ int main(int argc, char** argv) {
                 }
             }
 
-        auto now = std::chrono::steady_clock::now();
-        auto idle_sec = std::chrono::duration_cast<std::chrono::seconds>(now - last_input).count();
-        if (idle_sec >= config.idle_threshold_sec) {
-            auto_cycle = false;
-            current_view = ViewMode::Clock;
-        }
-
-        if (auto_cycle) {
-            int cycle_total = config.auto_cycle_clock_sec + config.auto_cycle_calendar_sec;
-            if (cycle_total > 0) {
-                int elapsed = static_cast<int>(std::chrono::duration_cast<std::chrono::seconds>(now - auto_cycle_start).count());
-                int mod = elapsed % cycle_total;
-                current_view = (mod < config.auto_cycle_calendar_sec) ? ViewMode::Calendar : ViewMode::Clock;
+            auto now = std::chrono::steady_clock::now();
+            auto idle_sec = std::chrono::duration_cast<std::chrono::seconds>(now - last_input).count();
+            if (idle_sec >= config.idle_threshold_sec) {
+                current_view = ViewMode::Clock;
             }
-        }
 
             SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
             SDL_RenderClear(renderer);

@@ -73,7 +73,7 @@ Copy `config/config.example.json` to `config/config.json` and edit it:
 - `font_path`: path to a TTF font file (required)
 - `db_path`: SQLite cache path
 - `mock_mode`: `true` to seed sample events for UI testing
-- `idle_threshold_sec`, `auto_cycle_clock_sec`, `auto_cycle_calendar_sec`: idle auto-cycle timing
+- `idle_threshold_sec`: seconds before returning to Clock view when idle
 - `sync_interval_sec`, `time_window_days`: sync behavior
 - `ics_url`: secret iCal (ICS) URL to sync your calendar (required for live data)
 - `sprite_dir`: folder for time-of-day sprites (default `./assets/sprites`)
