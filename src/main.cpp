@@ -14,6 +14,7 @@
 #include <filesystem>
 #include <fstream>
 #include <cstdlib>
+#include <cctype>
 #include <iostream>
 
 namespace {
@@ -44,6 +45,18 @@ std::filesystem::path ResolvePath(const std::filesystem::path& config_path,
         return fallback;
     }
     return candidate;
+}
+
+std::string Trim(const std::string& value) {
+    size_t start = 0;
+    while (start < value.size() && std::isspace(static_cast<unsigned char>(value[start]))) {
+        ++start;
+    }
+    size_t end = value.size();
+    while (end > start && std::isspace(static_cast<unsigned char>(value[end - 1]))) {
+        --end;
+    }
+    return value.substr(start, end - start);
 }
 
 } // namespace
@@ -88,6 +101,7 @@ bool LoadConfig(const std::string& path, AppConfig* out) {
     out->font_path = j.value("font_path", out->font_path);
     out->db_path = j.value("db_path", out->db_path);
     out->mock_mode = j.value("mock_mode", out->mock_mode);
+    out->ics_url = j.value("ics_url", out->ics_url);
     out->sprite_dir = j.value("sprite_dir", out->sprite_dir);
 
     return true;
@@ -105,11 +119,13 @@ int main(int argc, char** argv) {
     }
 
     const char* env_ics = std::getenv("ICS_URL");
-    if (!env_ics || env_ics[0] == '\0') {
-        std::cerr << "ICS_URL is required. Set it in the environment before running.\n";
-        return 1;
+    if (env_ics && env_ics[0] != '\0') {
+        config.ics_url = env_ics;
     }
-    config.ics_url = env_ics;
+    config.ics_url = Trim(config.ics_url);
+    if (!config.mock_mode && config.ics_url.empty()) {
+        std::cerr << "No ICS URL configured. Running in cache-only mode.\n";
+    }
 
     std::filesystem::path config_abs = std::filesystem::absolute(config_path);
     config.font_path = ResolvePath(config_abs, config.font_path, true).string();

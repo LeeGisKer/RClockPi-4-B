@@ -88,6 +88,12 @@ std::string SyncStatusText(EventStore* store, int64_t now_ts) {
         label = "Offline";
     } else if (label == "mock") {
         label = "Mock";
+    } else if (label == "cache") {
+        label = "Cache";
+    }
+
+    if (label == "Cache") {
+        return "Cache only";
     }
 
     if (ts_str.empty()) {

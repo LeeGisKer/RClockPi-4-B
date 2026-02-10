@@ -435,6 +435,7 @@ void CalendarSyncService::Run() {
         int64_t now_ts = TimeUtil::NowTs();
         bool ok = false;
         std::string error;
+        std::string sync_status = "offline";
 
         if (config_.mock_mode) {
             if (!seeded) {
@@ -443,14 +444,19 @@ void CalendarSyncService::Run() {
             } else {
                 ok = true;
             }
-            store.SetMeta("last_sync_status", "mock");
-            store.SetMeta("last_sync_error", "");
+            sync_status = "mock";
+        } else if (Trim(config_.ics_url).empty()) {
+            ok = true;
+            sync_status = "cache";
         } else {
             ok = SyncOnce(&store, &error);
-            store.SetMeta("last_sync_status", ok ? "online" : "offline");
+            sync_status = ok ? "online" : "offline";
         }
 
-        store.SetMeta("last_sync_ts", std::to_string(now_ts));
+        store.SetMeta("last_sync_status", sync_status);
+        if (sync_status != "cache") {
+            store.SetMeta("last_sync_ts", std::to_string(now_ts));
+        }
         if (!ok) {
             if (error.empty()) {
                 error = "sync failed";

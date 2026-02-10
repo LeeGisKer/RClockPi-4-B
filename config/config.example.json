@@ -9,5 +9,6 @@
   "font_path": "../assets/Minecraft.ttf",
   "db_path": "./data/calendar.db",
   "mock_mode": false,
+  "ics_url": "",
   "sprite_dir": "../assets/sprites"
 }

@@ -34,7 +34,7 @@ cmake --build . -j4
 4) Run (fullscreen):
 
 ```bash
-./rpi_calendar ../config/config.json
+./run_clock.sh
 ```
 
 Keys: `Space` toggles views, `Esc` quits, `S` saves a screenshot to `data/preview.bmp`.
@@ -61,7 +61,7 @@ cmake --build . -j4
 ## Run
 
 ```bash
-./rpi_calendar ../config/config.json
+./run_clock.sh
 ```
 
 The app runs fullscreen by default. Press `Esc` to quit.
@@ -75,15 +75,22 @@ Copy `config/config.example.json` to `config/config.json` and edit it:
 - `mock_mode`: `true` to seed sample events for UI testing
 - `idle_threshold_sec`: seconds before returning to Clock view when idle
 - `sync_interval_sec`, `time_window_days`: sync behavior
-- `ics_url`: secret iCal (ICS) URL to sync your calendar (required for live data)
+- `ics_url`: secret iCal (ICS) URL to sync your calendar (optional; empty = cache-only mode)
 - `sprite_dir`: folder for time-of-day sprites (default `./assets/sprites`)
 - `night_mode_enabled`, `night_start_hour`, `night_end_hour`, `night_dim_alpha`: dim the screen during night hours
 - Keep `ics_url` private; it grants read access to the calendar.
+- `ICS_URL` environment variable overrides `ics_url` from config when set.
+
+## Offline behavior
+
+- The app keeps events in SQLite and continues running if internet is down.
+- If `ics_url` is not configured (and `mock_mode` is `false`), the app starts in cache-only mode.
+- Increase `time_window_days` if you need to prefetch more days before going offline.
 
 ## Using a secret iCal (ICS) URL
 
 1) Copy your calendar's **secret iCal URL** from Google Calendar settings.
-2) Set `ics_url` in `config/config.json`.
+2) Set `ics_url` in `config/config.json` (or export `ICS_URL`).
 3) Set `mock_mode` to `false`.
 
 ## Mock mode
