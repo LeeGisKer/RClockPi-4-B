@@ -66,6 +66,17 @@ cmake --build . -j4
 
 The app runs fullscreen by default. Press `Esc` to quit.
 
+`run_clock.sh` behavior:
+- Disables X11 screen blanking/DPMS when available.
+- Uses `systemd-inhibit` (when installed) to block idle sleep/shutdown while the app is running.
+- Restarts the app automatically if it exits unexpectedly.
+- Writes logs to `logs/rpi_calendar.log`.
+
+Optional launcher env vars:
+- `RESTART_ON_EXIT=0` disable auto-restart loop
+- `RESTART_DELAY_SEC=2` seconds before restart
+- `LOG_FILE=/path/to/file.log` custom log path
+
 ## Config
 
 Copy `config/config.example.json` to `config/config.json` and edit it:
@@ -86,6 +97,28 @@ Copy `config/config.example.json` to `config/config.json` and edit it:
 - The app keeps events in SQLite and continues running if internet is down.
 - If `ics_url` is not configured (and `mock_mode` is `false`), the app starts in cache-only mode.
 - Increase `time_window_days` if you need to prefetch more days before going offline.
+
+## If the Pi really powers off after hours
+
+If the whole Raspberry Pi loses power (not just a blank screen), this is usually hardware/power/thermal related:
+
+1) Check undervoltage / throttling:
+```bash
+vcgencmd get_throttled
+```
+If non-zero bits appear often, use a stronger PSU/cable.
+
+2) Check temperature while running:
+```bash
+vcgencmd measure_temp
+```
+Sustained high temperature can trigger instability.
+
+3) Check reboot/shutdown reasons:
+```bash
+journalctl -b -1 -e
+```
+Look for `Under-voltage`, `thermal`, `shutdown`, `kernel panic`.
 
 ## Using a secret iCal (ICS) URL
 
