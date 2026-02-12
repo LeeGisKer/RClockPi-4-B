@@ -136,7 +136,7 @@ std::string BuildOpenMeteoUrl(const WeatherConfig& config) {
         << "?latitude=" << std::fixed << std::setprecision(5) << config.latitude
         << "&longitude=" << std::fixed << std::setprecision(5) << config.longitude
         << "&current=temperature_2m,weather_code,is_day,wind_speed_10m,time"
-        << "&hourly=temperature_2m,weather_code,is_day"
+        << "&hourly=temperature_2m,weather_code"
         << "&daily=weather_code,temperature_2m_max,temperature_2m_min"
         << "&forecast_days=7"
         << "&timezone=auto";
@@ -284,6 +284,10 @@ bool WeatherSyncService::SyncOnce(EventStore* store, std::string* error) {
     if (resp.code != 200) {
         if (error) {
             *error = "weather http " + std::to_string(resp.code);
+            if (!resp.body.empty()) {
+                std::string snippet = resp.body.substr(0, 160);
+                *error += " - " + snippet;
+            }
         }
         return false;
     }
