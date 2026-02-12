@@ -203,6 +203,41 @@ std::string SyncStatusLabel(EventStore* store, int64_t now_ts) {
     return label + " (" + std::to_string(minutes) + "m)";
 }
 
+std::string WeatherSummaryLine(EventStore* store) {
+    if (!store) {
+        return "Weather unavailable";
+    }
+
+    std::string status = store->GetMeta("weather_status");
+    std::string temp_c = store->GetMeta("weather_temp_c");
+    std::string summary = store->GetMeta("weather_summary");
+
+    if (status == "disabled") {
+        return "Weather off";
+    }
+    if (status == "config") {
+        return "Weather needs setup";
+    }
+
+    std::string line;
+    if (!temp_c.empty()) {
+        line += temp_c + " C";
+    }
+    if (!summary.empty()) {
+        if (!line.empty()) {
+            line += "  ";
+        }
+        line += summary;
+    }
+
+    if (line.empty()) {
+        line = "Weather unavailable";
+    } else if (status == "offline") {
+        line += " (cached)";
+    }
+    return line;
+}
+
 std::string JoinPath(const std::string& dir, const std::string& file) {
     if (dir.empty()) {
         return file;
@@ -439,19 +474,22 @@ void ClockView::UpdateCache(int width, int height, int64_t now_ts) {
     }
     next_summary = TruncateText(info_font_, next_summary, layout.right_max_w);
 
+    std::string weather_summary = TruncateText(info_font_, WeatherSummaryLine(store_), layout.right_max_w);
+
     std::string today_summary = (today_events.size() > 0)
         ? ("Today: " + std::to_string(static_cast<int>(today_events.size())) + " events")
         : "Today: Free";
+    today_summary = TruncateText(info_font_, today_summary, layout.right_max_w);
 
     std::array<std::string, 4> right_lines = {
+        weather_summary,
         next_summary,
         today_summary,
-        SyncStatusLabel(store_, now_ts),
-        ""
+        SyncStatusLabel(store_, now_ts)
     };
 
     for (size_t i = 0; i < right_lines.size(); ++i) {
-        SDL_Color color = (i == 0) ? fg : dim;
+        SDL_Color color = (i <= 1) ? fg : dim;
         UpdateText(right_texts_[i], info_font_, right_lines[i], color);
     }
 

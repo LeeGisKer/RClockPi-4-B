@@ -1,15 +1,18 @@
 #include <SDL.h>
 #include <SDL_ttf.h>
 #include <SDL_image.h>
+#include <curl/curl.h>
 
 #include <nlohmann/json.hpp>
 
 #include "db/EventStore.h"
 #include "services/CalendarSyncService.h"
+#include "services/WeatherSyncService.h"
 #include "util/TimeUtil.h"
 #include "views/CalendarView.h"
 #include "views/ClockView.h"
 
+#include <algorithm>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
@@ -59,6 +62,19 @@ std::string Trim(const std::string& value) {
     return value.substr(start, end - start);
 }
 
+class CurlGlobalGuard {
+public:
+    CurlGlobalGuard() : initialized_(curl_global_init(CURL_GLOBAL_DEFAULT) == 0) {}
+    ~CurlGlobalGuard() {
+        if (initialized_) {
+            curl_global_cleanup();
+        }
+    }
+    bool IsInitialized() const { return initialized_; }
+private:
+    bool initialized_ = false;
+};
+
 } // namespace
 
 struct AppConfig {
@@ -73,6 +89,10 @@ struct AppConfig {
     std::string db_path = "./data/calendar.db";
     bool mock_mode = true;
     std::string ics_url;
+    bool weather_enabled = false;
+    double weather_latitude = 0.0;
+    double weather_longitude = 0.0;
+    int weather_sync_interval_sec = 900;
     std::string sprite_dir = "./assets/sprites";
 };
 
@@ -102,6 +122,10 @@ bool LoadConfig(const std::string& path, AppConfig* out) {
     out->db_path = j.value("db_path", out->db_path);
     out->mock_mode = j.value("mock_mode", out->mock_mode);
     out->ics_url = j.value("ics_url", out->ics_url);
+    out->weather_enabled = j.value("weather_enabled", out->weather_enabled);
+    out->weather_latitude = j.value("weather_latitude", out->weather_latitude);
+    out->weather_longitude = j.value("weather_longitude", out->weather_longitude);
+    out->weather_sync_interval_sec = j.value("weather_sync_interval_sec", out->weather_sync_interval_sec);
     out->sprite_dir = j.value("sprite_dir", out->sprite_dir);
 
     return true;
@@ -147,8 +171,24 @@ int main(int argc, char** argv) {
     sync_config.mock_mode = config.mock_mode;
     sync_config.ics_url = config.ics_url;
 
+    CurlGlobalGuard curl_guard;
+    if (!curl_guard.IsInitialized()) {
+        std::cerr << "libcurl global init failed\n";
+        return 1;
+    }
+
     CalendarSyncService sync_service(sync_config);
     sync_service.Start();
+
+    WeatherConfig weather_config;
+    weather_config.db_path = config.db_path;
+    weather_config.enabled = config.weather_enabled;
+    weather_config.latitude = config.weather_latitude;
+    weather_config.longitude = config.weather_longitude;
+    weather_config.sync_interval_sec = std::max(60, config.weather_sync_interval_sec);
+
+    WeatherSyncService weather_service(weather_config);
+    weather_service.Start();
 
     if (SDL_Init(SDL_INIT_VIDEO) != 0) {
         std::cerr << "SDL_Init failed: " << SDL_GetError() << "\n";
@@ -342,6 +382,7 @@ int main(int argc, char** argv) {
         }
     }
 
+    weather_service.Stop();
     sync_service.Stop();
 
     TTF_CloseFont(font_time);

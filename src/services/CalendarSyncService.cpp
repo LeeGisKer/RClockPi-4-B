@@ -418,15 +418,9 @@ bool CalendarSyncService::IsRunning() const {
 }
 
 void CalendarSyncService::Run() {
-    if (curl_global_init(CURL_GLOBAL_DEFAULT) != 0) {
-        std::cerr << "libcurl global init failed\n";
-        return;
-    }
-
     EventStore store(config_.db_path);
     if (!store.Open()) {
         std::cerr << "CalendarSyncService: failed to open DB\n";
-        curl_global_cleanup();
         return;
     }
 
@@ -471,7 +465,6 @@ void CalendarSyncService::Run() {
         }
     }
 
-    curl_global_cleanup();
 }
 
 bool CalendarSyncService::SyncOnce(EventStore* store, std::string* error) {

@@ -87,6 +87,9 @@ Copy `config/config.example.json` to `config/config.json` and edit it:
 - `idle_threshold_sec`: seconds before returning to Clock view when idle
 - `sync_interval_sec`, `time_window_days`: sync behavior
 - `ics_url`: secret iCal (ICS) URL to sync your calendar (optional; empty = cache-only mode)
+- `weather_enabled`: enable live weather in the Clock view right panel
+- `weather_latitude`, `weather_longitude`: coordinates for weather lookup
+- `weather_sync_interval_sec`: weather refresh interval (seconds)
 - `sprite_dir`: folder for time-of-day sprites (default `./assets/sprites`)
 - `night_mode_enabled`, `night_start_hour`, `night_end_hour`, `night_dim_alpha`: dim the screen during night hours
 - Keep `ics_url` private; it grants read access to the calendar.
@@ -97,6 +100,16 @@ Copy `config/config.example.json` to `config/config.json` and edit it:
 - The app keeps events in SQLite and continues running if internet is down.
 - If `ics_url` is not configured (and `mock_mode` is `false`), the app starts in cache-only mode.
 - Increase `time_window_days` if you need to prefetch more days before going offline.
+- Weather uses Open-Meteo (no API key); if internet drops it shows the last cached weather data.
+
+## Weather setup
+
+1) In `config/config.json`, set:
+   - `"weather_enabled": true`
+   - `"weather_latitude": <your-latitude>`
+   - `"weather_longitude": <your-longitude>`
+2) Keep `"weather_sync_interval_sec"` around `600-1800` for kiosk use.
+3) Restart the app and check the Clock view right panel for current weather.
 
 ## If the Pi really powers off after hours
 

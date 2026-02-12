@@ -18,6 +18,7 @@ add_executable(rpi_calendar
     src/views/ClockView.cpp
     src/views/CalendarView.cpp
     src/services/CalendarSyncService.cpp
+    src/services/WeatherSyncService.cpp
     src/db/EventStore.cpp
     src/util/TimeUtil.cpp
 )

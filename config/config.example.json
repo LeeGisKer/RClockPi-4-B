@@ -10,5 +10,9 @@
   "db_path": "./data/calendar.db",
   "mock_mode": false,
   "ics_url": "",
+  "weather_enabled": false,
+  "weather_latitude": 40.7128,
+  "weather_longitude": -74.0060,
+  "weather_sync_interval_sec": 900,
   "sprite_dir": "../assets/sprites"
 }
