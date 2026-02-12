@@ -11,6 +11,7 @@
 #include "util/TimeUtil.h"
 #include "views/CalendarView.h"
 #include "views/ClockView.h"
+#include "views/WeatherView.h"
 
 #include <algorithm>
 #include <chrono>
@@ -93,6 +94,7 @@ struct AppConfig {
     double weather_latitude = 0.0;
     double weather_longitude = 0.0;
     int weather_sync_interval_sec = 900;
+    std::string weather_sprite_dir = "./assets/weather";
     std::string sprite_dir = "./assets/sprites";
 };
 
@@ -126,6 +128,7 @@ bool LoadConfig(const std::string& path, AppConfig* out) {
     out->weather_latitude = j.value("weather_latitude", out->weather_latitude);
     out->weather_longitude = j.value("weather_longitude", out->weather_longitude);
     out->weather_sync_interval_sec = j.value("weather_sync_interval_sec", out->weather_sync_interval_sec);
+    out->weather_sprite_dir = j.value("weather_sprite_dir", out->weather_sprite_dir);
     out->sprite_dir = j.value("sprite_dir", out->sprite_dir);
 
     return true;
@@ -154,6 +157,7 @@ int main(int argc, char** argv) {
     std::filesystem::path config_abs = std::filesystem::absolute(config_path);
     config.font_path = ResolvePath(config_abs, config.font_path, true).string();
     config.sprite_dir = ResolvePath(config_abs, config.sprite_dir, true).string();
+    config.weather_sprite_dir = ResolvePath(config_abs, config.weather_sprite_dir, true).string();
     config.db_path = ResolvePath(config_abs, config.db_path, true).string();
 
     std::filesystem::create_directories(std::filesystem::path(config.db_path).parent_path());
@@ -236,8 +240,9 @@ int main(int argc, char** argv) {
     TTF_Font* font_header = TTF_OpenFont(config.font_path.c_str(), 18);
     TTF_Font* font_day = TTF_OpenFont(config.font_path.c_str(), 16);
     TTF_Font* font_agenda = TTF_OpenFont(config.font_path.c_str(), 16);
+    TTF_Font* font_weather_temp = TTF_OpenFont(config.font_path.c_str(), 50);
 
-    if (!font_time || !font_date || !font_info || !font_header || !font_day || !font_agenda) {
+    if (!font_time || !font_date || !font_info || !font_header || !font_day || !font_agenda || !font_weather_temp) {
         std::cerr << "Failed to load font: " << config.font_path << "\n";
         if (font_time) TTF_CloseFont(font_time);
         if (font_date) TTF_CloseFont(font_date);
@@ -245,6 +250,7 @@ int main(int argc, char** argv) {
         if (font_header) TTF_CloseFont(font_header);
         if (font_day) TTF_CloseFont(font_day);
         if (font_agenda) TTF_CloseFont(font_agenda);
+        if (font_weather_temp) TTF_CloseFont(font_weather_temp);
         SDL_DestroyRenderer(renderer);
         SDL_DestroyWindow(window);
         TTF_Quit();
@@ -255,8 +261,9 @@ int main(int argc, char** argv) {
     {
         ClockView clock_view(renderer, font_time, font_date, font_info, &store, config.sprite_dir);
         CalendarView calendar_view(renderer, font_header, font_day, font_agenda, &store);
+        WeatherView weather_view(renderer, font_header, font_info, font_weather_temp, &store, config.weather_sprite_dir);
 
-        enum class ViewMode { Clock, Calendar };
+        enum class ViewMode { Clock, Calendar, Weather };
         ViewMode current_view = ViewMode::Clock;
 
         auto last_input = std::chrono::steady_clock::now();
@@ -275,7 +282,13 @@ int main(int argc, char** argv) {
                             running = false;
                             break;
                         case SDLK_SPACE:
-                            current_view = (current_view == ViewMode::Clock) ? ViewMode::Calendar : ViewMode::Clock;
+                            if (current_view == ViewMode::Clock) {
+                                current_view = ViewMode::Calendar;
+                            } else if (current_view == ViewMode::Calendar) {
+                                current_view = ViewMode::Weather;
+                            } else {
+                                current_view = ViewMode::Clock;
+                            }
                             break;
                         case SDLK_s:
                             capture_next_frame = true;
@@ -335,8 +348,10 @@ int main(int argc, char** argv) {
 
             if (current_view == ViewMode::Clock) {
                 clock_view.Render(w, h);
-            } else {
+            } else if (current_view == ViewMode::Calendar) {
                 calendar_view.Render(w, h);
+            } else {
+                weather_view.Render(w, h);
             }
 
             if (config.night_mode_enabled) {
@@ -391,6 +406,7 @@ int main(int argc, char** argv) {
     TTF_CloseFont(font_header);
     TTF_CloseFont(font_day);
     TTF_CloseFont(font_agenda);
+    TTF_CloseFont(font_weather_temp);
 
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);

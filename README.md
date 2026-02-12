@@ -37,7 +37,7 @@ cmake --build . -j4
 ./run_clock.sh
 ```
 
-Keys: `Space` toggles views, `Esc` quits, `S` saves a screenshot to `data/preview.bmp`.
+Keys: `Space` cycles views (Clock -> Calendar -> Weather), `Esc` quits, `S` saves a screenshot to `data/preview.bmp`.
 
 ### Common Pi notes
 
@@ -87,9 +87,10 @@ Copy `config/config.example.json` to `config/config.json` and edit it:
 - `idle_threshold_sec`: seconds before returning to Clock view when idle
 - `sync_interval_sec`, `time_window_days`: sync behavior
 - `ics_url`: secret iCal (ICS) URL to sync your calendar (optional; empty = cache-only mode)
-- `weather_enabled`: enable live weather in the Clock view right panel
+- `weather_enabled`: enable live weather sync
 - `weather_latitude`, `weather_longitude`: coordinates for weather lookup
 - `weather_sync_interval_sec`: weather refresh interval (seconds)
+- `weather_sprite_dir`: folder with weather condition sprites
 - `sprite_dir`: folder for time-of-day sprites (default `./assets/sprites`)
 - `night_mode_enabled`, `night_start_hour`, `night_end_hour`, `night_dim_alpha`: dim the screen during night hours
 - Keep `ics_url` private; it grants read access to the calendar.
@@ -109,7 +110,12 @@ Copy `config/config.example.json` to `config/config.json` and edit it:
    - `"weather_latitude": <your-latitude>`
    - `"weather_longitude": <your-longitude>`
 2) Keep `"weather_sync_interval_sec"` around `600-1800` for kiosk use.
-3) Restart the app and check the Clock view right panel for current weather.
+3) Add your custom sprites to `weather_sprite_dir` using these filenames:
+   - `clear.png`, `clear_night.png`, `mostly_clear.png`, `partly_cloudy.png`
+   - `overcast.png`, `fog.png`, `drizzle.png`, `rain.png`
+   - `snow.png`, `showers.png`, `thunder.png`, `unknown.png`
+4) Restart the app and press `Space` until the Weather page is visible.
+5) The Weather page shows current conditions, hourly forecast, and 7-day forecast.
 
 ## If the Pi really powers off after hours
 

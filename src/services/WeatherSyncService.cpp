@@ -119,7 +119,10 @@ std::string BuildOpenMeteoUrl(const WeatherConfig& config) {
     out << "https://api.open-meteo.com/v1/forecast"
         << "?latitude=" << std::fixed << std::setprecision(5) << config.latitude
         << "&longitude=" << std::fixed << std::setprecision(5) << config.longitude
-        << "&current=temperature_2m,weather_code,is_day,wind_speed_10m"
+        << "&current=temperature_2m,weather_code,is_day,wind_speed_10m,time"
+        << "&hourly=temperature_2m,weather_code,is_day"
+        << "&daily=weather_code,temperature_2m_max,temperature_2m_min"
+        << "&forecast_days=7"
         << "&timezone=auto";
     return out.str();
 }
@@ -261,9 +264,77 @@ bool WeatherSyncService::SyncOnce(EventStore* store, std::string* error) {
 
     store->SetMeta("weather_temp_c", FormatDecimal1(temperature));
     store->SetMeta("weather_code", std::to_string(weather_code));
+    store->SetMeta("weather_is_day", is_day ? "1" : "0");
     store->SetMeta("weather_summary", WeatherCodeText(weather_code, is_day));
     if (std::isfinite(wind_kmh)) {
         store->SetMeta("weather_wind_kmh", FormatDecimal1(wind_kmh));
+    }
+
+    if (j.contains("hourly") && j["hourly"].is_object()) {
+        const auto& hourly = j["hourly"];
+        if (hourly.contains("time") && hourly.contains("temperature_2m") && hourly.contains("weather_code") &&
+            hourly["time"].is_array() && hourly["temperature_2m"].is_array() && hourly["weather_code"].is_array()) {
+            const auto& times = hourly["time"];
+            const auto& temps = hourly["temperature_2m"];
+            const auto& codes = hourly["weather_code"];
+            size_t count = std::min({ times.size(), temps.size(), codes.size() });
+            size_t start_idx = 0;
+            if (current.contains("time") && current["time"].is_string()) {
+                const std::string current_time = current["time"].get<std::string>();
+                for (size_t i = 0; i < count; ++i) {
+                    if (times[i].is_string() && times[i].get<std::string>() == current_time) {
+                        start_idx = i;
+                        break;
+                    }
+                }
+            }
+
+            nlohmann::json hourly_out = nlohmann::json::array();
+            for (size_t i = start_idx; i < count && hourly_out.size() < 24; ++i) {
+                if (!times[i].is_string() || !temps[i].is_number() || !codes[i].is_number_integer()) {
+                    continue;
+                }
+                nlohmann::json item;
+                item["time"] = times[i].get<std::string>();
+                item["temp_c"] = temps[i].get<double>();
+                item["code"] = codes[i].get<int>();
+                if (hourly.contains("is_day") && hourly["is_day"].is_array() &&
+                    i < hourly["is_day"].size() && hourly["is_day"][i].is_number_integer()) {
+                    item["is_day"] = hourly["is_day"][i].get<int>();
+                } else {
+                    item["is_day"] = 1;
+                }
+                hourly_out.push_back(std::move(item));
+            }
+            store->SetMeta("weather_hourly_json", hourly_out.dump());
+        }
+    }
+
+    if (j.contains("daily") && j["daily"].is_object()) {
+        const auto& daily = j["daily"];
+        if (daily.contains("time") && daily.contains("temperature_2m_max") && daily.contains("temperature_2m_min") &&
+            daily.contains("weather_code") && daily["time"].is_array() && daily["temperature_2m_max"].is_array() &&
+            daily["temperature_2m_min"].is_array() && daily["weather_code"].is_array()) {
+            const auto& dates = daily["time"];
+            const auto& maxes = daily["temperature_2m_max"];
+            const auto& mins = daily["temperature_2m_min"];
+            const auto& codes = daily["weather_code"];
+            size_t count = std::min({ dates.size(), maxes.size(), mins.size(), codes.size() });
+
+            nlohmann::json daily_out = nlohmann::json::array();
+            for (size_t i = 0; i < count && daily_out.size() < 7; ++i) {
+                if (!dates[i].is_string() || !maxes[i].is_number() || !mins[i].is_number() || !codes[i].is_number_integer()) {
+                    continue;
+                }
+                nlohmann::json item;
+                item["date"] = dates[i].get<std::string>();
+                item["max_c"] = maxes[i].get<double>();
+                item["min_c"] = mins[i].get<double>();
+                item["code"] = codes[i].get<int>();
+                daily_out.push_back(std::move(item));
+            }
+            store->SetMeta("weather_daily_json", daily_out.dump());
+        }
     }
     return true;
 }

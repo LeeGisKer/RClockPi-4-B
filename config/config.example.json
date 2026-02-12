@@ -14,5 +14,6 @@
   "weather_latitude": 40.7128,
   "weather_longitude": -74.0060,
   "weather_sync_interval_sec": 900,
+  "weather_sprite_dir": "../assets/weather",
   "sprite_dir": "../assets/sprites"
 }
