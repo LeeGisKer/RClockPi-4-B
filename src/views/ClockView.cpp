@@ -449,7 +449,6 @@ void ClockView::UpdateCache(int width, int height, int64_t now_ts) {
     UpdateText(footer_text_, info_font_, footer_text, dim);
 
     std::vector<EventRecord> today_events = store_ ? store_->GetEventsForDay(now_ts) : std::vector<EventRecord>();
-    std::vector<EventRecord> tomorrow_events = store_ ? store_->GetEventsForDay(now_ts + 24 * 60 * 60) : std::vector<EventRecord>();
     int all_day_today = 0;
     int remaining_today = 0;
     for (const auto& ev : today_events) {
@@ -474,7 +473,8 @@ void ClockView::UpdateCache(int width, int height, int64_t now_ts) {
     }
     next_summary = TruncateText(info_font_, next_summary, layout.right_max_w);
 
-    std::string weather_summary = TruncateText(info_font_, WeatherSummaryLine(store_), layout.right_max_w);
+    int bottom_cell_max_w = std::max(80, layout.panel.w / 2 - 36);
+    std::string weather_summary = TruncateText(info_font_, WeatherSummaryLine(store_), bottom_cell_max_w);
 
     std::string today_summary = (today_events.size() > 0)
         ? ("Today: " + std::to_string(static_cast<int>(today_events.size())) + " events")
@@ -482,26 +482,26 @@ void ClockView::UpdateCache(int width, int height, int64_t now_ts) {
     today_summary = TruncateText(info_font_, today_summary, layout.right_max_w);
 
     std::array<std::string, 4> right_lines = {
-        weather_summary,
         next_summary,
         today_summary,
-        SyncStatusLabel(store_, now_ts)
+        SyncStatusLabel(store_, now_ts),
+        ""
     };
 
     for (size_t i = 0; i < right_lines.size(); ++i) {
-        SDL_Color color = (i <= 1) ? fg : dim;
+        SDL_Color color = (i == 0) ? fg : dim;
         UpdateText(right_texts_[i], info_font_, right_lines[i], color);
     }
 
     std::array<std::string, 4> labels = {
         "Today",
-        (tomorrow_events.size() > 0) ? "Tomorrow" : "",
+        "Weather",
         (all_day_today > 0) ? "All day" : "",
         (remaining_today > 0) ? "Remaining" : ""
     };
     std::array<std::string, 4> values = {
-        (today_events.size() > 0) ? (std::to_string(static_cast<int>(today_events.size())) + " events") : "Free",
-        (tomorrow_events.size() > 0) ? (std::to_string(static_cast<int>(tomorrow_events.size())) + " events") : "",
+        TruncateText(info_font_, (today_events.size() > 0) ? (std::to_string(static_cast<int>(today_events.size())) + " events") : "Free", bottom_cell_max_w),
+        weather_summary,
         (all_day_today > 0) ? (std::to_string(all_day_today) + " today") : "",
         (remaining_today > 0) ? (std::to_string(remaining_today) + " today") : ""
     };
