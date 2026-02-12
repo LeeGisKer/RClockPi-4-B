@@ -525,6 +525,11 @@ void WeatherView::UpdateCache(int width, int height, int64_t now_ts) {
         if (!detail.empty()) {
             detail += "  ";
         }
+        detail += "Error: " + error;
+    } else if (status == "offline") {
+        if (!detail.empty()) {
+            detail += "  ";
+        }
         detail += "Using cached forecast";
     }
     UpdateText(detail_text_, body_font_, detail, dim);

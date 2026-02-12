@@ -28,9 +28,13 @@ size_t WriteCallback(void* ptr, size_t size, size_t nmemb, void* userdata) {
     return total;
 }
 
-bool HttpGet(CURL* curl, const std::string& url, HttpResponse* out) {
+bool HttpGet(CURL* curl, const std::string& url, HttpResponse* out, std::string* error_out) {
     out->body.clear();
     out->code = 0;
+
+    if (error_out) {
+        error_out->clear();
+    }
 
     curl_easy_reset(curl);
     curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
@@ -45,7 +49,11 @@ bool HttpGet(CURL* curl, const std::string& url, HttpResponse* out) {
 
     CURLcode res = curl_easy_perform(curl);
     if (res != CURLE_OK) {
-        std::cerr << "Weather HTTP GET failed: " << curl_easy_strerror(res) << "\n";
+        const char* err = curl_easy_strerror(res);
+        std::cerr << "Weather HTTP GET failed: " << err << "\n";
+        if (error_out) {
+            *error_out = err ? err : "curl error";
+        }
         return false;
     }
 
@@ -55,7 +63,7 @@ bool HttpGet(CURL* curl, const std::string& url, HttpResponse* out) {
 
 bool ProbeInternet(CURL* curl) {
     HttpResponse resp;
-    if (!HttpGet(curl, "http://connectivitycheck.gstatic.com/generate_204", &resp)) {
+    if (!HttpGet(curl, "http://connectivitycheck.gstatic.com/generate_204", &resp, nullptr)) {
         return false;
     }
     return resp.code >= 200 && resp.code < 500;
@@ -261,11 +269,15 @@ bool WeatherSyncService::SyncOnce(EventStore* store, std::string* error) {
 
     HttpResponse resp;
     std::string url = BuildOpenMeteoUrl(config_);
-    bool request_ok = HttpGet(curl, url, &resp);
+    std::string http_error;
+    bool request_ok = HttpGet(curl, url, &resp, &http_error);
     curl_easy_cleanup(curl);
     if (!request_ok) {
         if (error) {
             *error = "weather http failed";
+            if (!http_error.empty()) {
+                *error += ": " + http_error;
+            }
         }
         return false;
     }
