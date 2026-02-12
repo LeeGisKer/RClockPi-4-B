@@ -171,6 +171,7 @@ void WeatherSyncService::Run() {
 
     int interval = std::max(60, config_.sync_interval_sec);
     bool first_online_sync_done = !config_.enabled || !IsValidCoords(config_.latitude, config_.longitude);
+    bool internet_down_detected = false;
     while (running_) {
         int64_t now_ts = TimeUtil::NowTs();
         bool ok = false;
@@ -193,13 +194,11 @@ void WeatherSyncService::Run() {
                 }
                 store.SetMeta("internet_status", internet_ok ? "online" : "offline");
                 store.SetMeta("internet_last_check_ts", std::to_string(now_ts));
-                if (!internet_ok) {
-                    ok = false;
-                    status = "offline";
+
+                ok = SyncOnce(&store, &error);
+                status = ok ? "online" : "offline";
+                if (!internet_ok && !ok && error.empty()) {
                     error = "no internet";
-                } else {
-                    ok = SyncOnce(&store, &error);
-                    status = ok ? "online" : "offline";
                 }
             } else {
                 ok = SyncOnce(&store, &error);
@@ -225,9 +224,17 @@ void WeatherSyncService::Run() {
             store.SetMeta("weather_error", "");
         }
 
+        if (!first_online_sync_done && !ok) {
+            if (error == "no internet" ||
+                error.find("http failed") != std::string::npos ||
+                error.find("curl") != std::string::npos) {
+                internet_down_detected = true;
+            }
+        }
+
         int wait_sec = interval;
-        if (!first_online_sync_done && !ok && error == "no internet") {
-            wait_sec = std::min(interval, 15);
+        if (!first_online_sync_done && internet_down_detected && !ok) {
+            wait_sec = 1800;
         }
         for (int i = 0; i < wait_sec && running_; ++i) {
             std::this_thread::sleep_for(std::chrono::seconds(1));

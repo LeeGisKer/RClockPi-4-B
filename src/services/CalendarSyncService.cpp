@@ -436,6 +436,7 @@ void CalendarSyncService::Run() {
 
     bool seeded = false;
     bool first_online_sync_done = config_.mock_mode || Trim(config_.ics_url).empty();
+    bool internet_down_detected = false;
     while (running_) {
         int64_t now_ts = TimeUtil::NowTs();
         bool ok = false;
@@ -462,13 +463,11 @@ void CalendarSyncService::Run() {
                 }
                 store.SetMeta("internet_status", internet_ok ? "online" : "offline");
                 store.SetMeta("internet_last_check_ts", std::to_string(now_ts));
-                if (!internet_ok) {
-                    ok = false;
-                    sync_status = "offline";
+
+                ok = SyncOnce(&store, &error);
+                sync_status = ok ? "online" : "offline";
+                if (!internet_ok && !ok && error.empty()) {
                     error = "no internet";
-                } else {
-                    ok = SyncOnce(&store, &error);
-                    sync_status = ok ? "online" : "offline";
                 }
             } else {
                 ok = SyncOnce(&store, &error);
@@ -493,9 +492,17 @@ void CalendarSyncService::Run() {
             store.SetMeta("last_sync_error", "");
         }
 
+        if (!first_online_sync_done && !ok) {
+            if (error == "no internet" ||
+                error.find("http failed") != std::string::npos ||
+                error.find("curl") != std::string::npos) {
+                internet_down_detected = true;
+            }
+        }
+
         int wait_sec = config_.sync_interval_sec;
-        if (!first_online_sync_done && !ok && error == "no internet") {
-            wait_sec = std::min(config_.sync_interval_sec, 15);
+        if (!first_online_sync_done && internet_down_detected && !ok) {
+            wait_sec = 1800;
         }
         for (int i = 0; i < wait_sec && running_; ++i) {
             std::this_thread::sleep_for(std::chrono::seconds(1));
