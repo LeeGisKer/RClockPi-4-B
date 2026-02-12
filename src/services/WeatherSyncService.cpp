@@ -53,6 +53,14 @@ bool HttpGet(CURL* curl, const std::string& url, HttpResponse* out) {
     return true;
 }
 
+bool ProbeInternet(CURL* curl) {
+    HttpResponse resp;
+    if (!HttpGet(curl, "http://connectivitycheck.gstatic.com/generate_204", &resp)) {
+        return false;
+    }
+    return resp.code >= 200 && resp.code < 500;
+}
+
 bool IsValidCoords(double latitude, double longitude) {
     return std::isfinite(latitude) &&
            std::isfinite(longitude) &&
@@ -162,6 +170,7 @@ void WeatherSyncService::Run() {
     }
 
     int interval = std::max(60, config_.sync_interval_sec);
+    bool first_online_sync_done = !config_.enabled || !IsValidCoords(config_.latitude, config_.longitude);
     while (running_) {
         int64_t now_ts = TimeUtil::NowTs();
         bool ok = false;
@@ -176,8 +185,30 @@ void WeatherSyncService::Run() {
             status = "config";
             error = "weather lat/lon invalid";
         } else {
-            ok = SyncOnce(&store, &error);
-            status = ok ? "online" : "offline";
+            if (!first_online_sync_done) {
+                CURL* probe_curl = curl_easy_init();
+                bool internet_ok = probe_curl && ProbeInternet(probe_curl);
+                if (probe_curl) {
+                    curl_easy_cleanup(probe_curl);
+                }
+                store.SetMeta("internet_status", internet_ok ? "online" : "offline");
+                store.SetMeta("internet_last_check_ts", std::to_string(now_ts));
+                if (!internet_ok) {
+                    ok = false;
+                    status = "offline";
+                    error = "no internet";
+                } else {
+                    ok = SyncOnce(&store, &error);
+                    status = ok ? "online" : "offline";
+                }
+            } else {
+                ok = SyncOnce(&store, &error);
+                status = ok ? "online" : "offline";
+            }
+        }
+
+        if (ok && status == "online") {
+            first_online_sync_done = true;
         }
 
         store.SetMeta("weather_status", status);
@@ -194,7 +225,11 @@ void WeatherSyncService::Run() {
             store.SetMeta("weather_error", "");
         }
 
-        for (int i = 0; i < interval && running_; ++i) {
+        int wait_sec = interval;
+        if (!first_online_sync_done && !ok && error == "no internet") {
+            wait_sec = std::min(interval, 15);
+        }
+        for (int i = 0; i < wait_sec && running_; ++i) {
             std::this_thread::sleep_for(std::chrono::seconds(1));
         }
     }

@@ -60,6 +60,16 @@ bool HttpGet(CURL* curl, const std::string& url, const std::vector<std::string>&
     return true;
 }
 
+bool ProbeInternet(CURL* curl) {
+    HttpResponse resp;
+    // This endpoint is commonly used for connectivity checks and returns quickly.
+    if (!HttpGet(curl, "http://connectivitycheck.gstatic.com/generate_204", {}, &resp)) {
+        return false;
+    }
+    // Any valid HTTP response means we have internet reachability.
+    return resp.code >= 200 && resp.code < 500;
+}
+
 time_t TimegmPortable(std::tm* tm) {
 #ifdef _WIN32
     return _mkgmtime(tm);
@@ -425,6 +435,7 @@ void CalendarSyncService::Run() {
     }
 
     bool seeded = false;
+    bool first_online_sync_done = config_.mock_mode || Trim(config_.ics_url).empty();
     while (running_) {
         int64_t now_ts = TimeUtil::NowTs();
         bool ok = false;
@@ -443,8 +454,30 @@ void CalendarSyncService::Run() {
             ok = true;
             sync_status = "cache";
         } else {
-            ok = SyncOnce(&store, &error);
-            sync_status = ok ? "online" : "offline";
+            if (!first_online_sync_done) {
+                CURL* probe_curl = curl_easy_init();
+                bool internet_ok = probe_curl && ProbeInternet(probe_curl);
+                if (probe_curl) {
+                    curl_easy_cleanup(probe_curl);
+                }
+                store.SetMeta("internet_status", internet_ok ? "online" : "offline");
+                store.SetMeta("internet_last_check_ts", std::to_string(now_ts));
+                if (!internet_ok) {
+                    ok = false;
+                    sync_status = "offline";
+                    error = "no internet";
+                } else {
+                    ok = SyncOnce(&store, &error);
+                    sync_status = ok ? "online" : "offline";
+                }
+            } else {
+                ok = SyncOnce(&store, &error);
+                sync_status = ok ? "online" : "offline";
+            }
+        }
+
+        if (ok && sync_status == "online") {
+            first_online_sync_done = true;
         }
 
         store.SetMeta("last_sync_status", sync_status);
@@ -460,7 +493,11 @@ void CalendarSyncService::Run() {
             store.SetMeta("last_sync_error", "");
         }
 
-        for (int i = 0; i < config_.sync_interval_sec && running_; ++i) {
+        int wait_sec = config_.sync_interval_sec;
+        if (!first_online_sync_done && !ok && error == "no internet") {
+            wait_sec = std::min(config_.sync_interval_sec, 15);
+        }
+        for (int i = 0; i < wait_sec && running_; ++i) {
             std::this_thread::sleep_for(std::chrono::seconds(1));
         }
     }
