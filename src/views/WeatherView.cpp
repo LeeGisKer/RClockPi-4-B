@@ -767,14 +767,53 @@ void WeatherView::Render(int width, int height) {
                 SDL_RenderCopy(renderer_, daily_day_texts_[i].texture, nullptr, &dst);
             }
 
-            if (i < static_cast<int>(daily_temp_texts_.size()) && daily_temp_texts_[i].texture) {
-                SDL_Rect dst{
-                    card.x + (card.w - daily_temp_texts_[i].w) / 2,
-                    card.y + card.h - daily_temp_texts_[i].h - 6,
-                    daily_temp_texts_[i].w,
-                    daily_temp_texts_[i].h
-                };
-                SDL_RenderCopy(renderer_, daily_temp_texts_[i].texture, nullptr, &dst);
+            if (i < static_cast<int>(daily_entries_.size())) {
+                const DailyEntry& entry = daily_entries_[i];
+                std::string hi;
+                std::string lo;
+                size_t slash = entry.temp_label.find('/');
+                if (slash != std::string::npos) {
+                    hi = Trim(entry.temp_label.substr(0, slash));
+                    lo = Trim(entry.temp_label.substr(slash + 1));
+                } else {
+                    hi = entry.temp_label;
+                }
+                if (!hi.empty() && hi.find('H') == std::string::npos) {
+                    hi = "H " + hi;
+                }
+                if (!lo.empty() && lo.find('L') == std::string::npos) {
+                    lo = "L " + lo;
+                }
+
+                if (!hi.empty()) {
+                    CachedText tmp_hi;
+                    UpdateText(tmp_hi, body_font_, hi, fg);
+                    if (tmp_hi.texture) {
+                        SDL_Rect dst{
+                            card.x + (card.w - tmp_hi.w) / 2,
+                            card.y + card.h - tmp_hi.h - 20,
+                            tmp_hi.w,
+                            tmp_hi.h
+                        };
+                        SDL_RenderCopy(renderer_, tmp_hi.texture, nullptr, &dst);
+                        SDL_DestroyTexture(tmp_hi.texture);
+                    }
+                }
+
+                if (!lo.empty()) {
+                    CachedText tmp_lo;
+                    UpdateText(tmp_lo, body_font_, lo, dim);
+                    if (tmp_lo.texture) {
+                        SDL_Rect dst{
+                            card.x + (card.w - tmp_lo.w) / 2,
+                            card.y + card.h - tmp_lo.h - 6,
+                            tmp_lo.w,
+                            tmp_lo.h
+                        };
+                        SDL_RenderCopy(renderer_, tmp_lo.texture, nullptr, &dst);
+                        SDL_DestroyTexture(tmp_lo.texture);
+                    }
+                }
             }
         }
     }
