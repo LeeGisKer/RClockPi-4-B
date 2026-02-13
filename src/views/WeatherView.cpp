@@ -536,8 +536,8 @@ void WeatherView::UpdateCache(int width, int height, int64_t now_ts) {
     }
     UpdateText(detail_text_, body_font_, detail, dim);
 
-    UpdateText(hourly_title_text_, body_font_, "Hourly", dim);
-    UpdateText(weekly_title_text_, body_font_, "7-Day", dim);
+    UpdateText(hourly_title_text_, body_font_, "Hourly Forecast", dim);
+    UpdateText(weekly_title_text_, body_font_, "7-Day Forecast", dim);
     UpdateText(hourly_empty_text_, body_font_, "No hourly forecast yet", dim);
     UpdateText(daily_empty_text_, body_font_, "No daily forecast yet", dim);
 
@@ -660,6 +660,8 @@ void WeatherView::Render(int width, int height) {
         layout.hourly.w - pad * 2,
         layout.hourly.h - 36
     };
+    SDL_SetRenderDrawColor(renderer_, line.r, line.g, line.b, 255);
+    SDL_RenderDrawLine(renderer_, hourly_body.x, hourly_body.y, hourly_body.x + hourly_body.w, hourly_body.y);
     if (hourly_entries_.empty()) {
         if (hourly_empty_text_.texture) {
             SDL_Rect dst{
@@ -725,6 +727,8 @@ void WeatherView::Render(int width, int height) {
         layout.weekly.w - pad * 2,
         layout.weekly.h - 34
     };
+    SDL_SetRenderDrawColor(renderer_, line.r, line.g, line.b, 255);
+    SDL_RenderDrawLine(renderer_, weekly_body.x, weekly_body.y, weekly_body.x + weekly_body.w, weekly_body.y);
     if (daily_entries_.empty()) {
         if (daily_empty_text_.texture) {
             SDL_Rect dst{
@@ -736,38 +740,37 @@ void WeatherView::Render(int width, int height) {
             SDL_RenderCopy(renderer_, daily_empty_text_.texture, nullptr, &dst);
         }
     } else {
-        int rows = std::min<int>(7, daily_entries_.size());
-        int row_h = std::max(20, weekly_body.h / std::max(1, rows));
-        for (int i = 0; i < rows; ++i) {
-            SDL_Rect row{
-                weekly_body.x,
-                weekly_body.y + i * row_h,
-                weekly_body.w,
-                (i == rows - 1) ? (weekly_body.h - row_h * i) : row_h
+        int cols = std::min<int>(7, daily_entries_.size());
+        int gap = 8;
+        int card_w = (weekly_body.w - gap * (cols - 1)) / std::max(1, cols);
+        int card_h = weekly_body.h - 4;
+        SDL_Color card_fill = { 240, 240, 240, 255 };
+        for (int i = 0; i < cols; ++i) {
+            SDL_Rect card{
+                weekly_body.x + i * (card_w + gap),
+                weekly_body.y + 4,
+                (i == cols - 1) ? (weekly_body.x + weekly_body.w - (weekly_body.x + i * (card_w + gap))) : card_w,
+                card_h
             };
-
-            if (i > 0) {
-                SDL_SetRenderDrawColor(renderer_, line.r, line.g, line.b, 255);
-                SDL_RenderDrawLine(renderer_, row.x, row.y, row.x + row.w, row.y);
-            }
+            SDL_SetRenderDrawColor(renderer_, card_fill.r, card_fill.g, card_fill.b, 255);
+            SDL_RenderFillRect(renderer_, &card);
+            SDL_SetRenderDrawColor(renderer_, line.r, line.g, line.b, 255);
+            SDL_RenderDrawRect(renderer_, &card);
 
             if (i < static_cast<int>(daily_day_texts_.size()) && daily_day_texts_[i].texture) {
                 SDL_Rect dst{
-                    row.x + 2,
-                    row.y + (row.h - daily_day_texts_[i].h) / 2,
+                    card.x + (card.w - daily_day_texts_[i].w) / 2,
+                    card.y + 6,
                     daily_day_texts_[i].w,
                     daily_day_texts_[i].h
                 };
                 SDL_RenderCopy(renderer_, daily_day_texts_[i].texture, nullptr, &dst);
             }
 
-            SDL_Rect icon_rect{ row.x + 70, row.y + 3, 20, std::max(12, row.h - 6) };
-            DrawWeatherSprite(daily_entries_[i].code, true, icon_rect);
-
             if (i < static_cast<int>(daily_temp_texts_.size()) && daily_temp_texts_[i].texture) {
                 SDL_Rect dst{
-                    row.x + row.w - daily_temp_texts_[i].w - 2,
-                    row.y + (row.h - daily_temp_texts_[i].h) / 2,
+                    card.x + (card.w - daily_temp_texts_[i].w) / 2,
+                    card.y + card.h - daily_temp_texts_[i].h - 6,
                     daily_temp_texts_[i].w,
                     daily_temp_texts_[i].h
                 };
