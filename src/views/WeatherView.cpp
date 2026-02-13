@@ -29,11 +29,11 @@ struct WeatherLayout {
 
 WeatherLayout ComputeLayout(int width, int height) {
     WeatherLayout layout;
-    layout.margin = std::max(12, width / 32);
+    layout.margin = std::max(14, width / 30);
     layout.panel = { layout.margin, layout.margin, width - 2 * layout.margin, height - 2 * layout.margin };
 
-    int top_h = static_cast<int>(layout.panel.h * 0.36f);
-    int hourly_h = static_cast<int>(layout.panel.h * 0.30f);
+    int top_h = static_cast<int>(layout.panel.h * 0.38f);
+    int hourly_h = static_cast<int>(layout.panel.h * 0.28f);
     int weekly_h = layout.panel.h - top_h - hourly_h;
 
     layout.top = { layout.panel.x, layout.panel.y, layout.panel.w, top_h };
@@ -577,6 +577,8 @@ void WeatherView::Render(int width, int height) {
     WeatherLayout layout = ComputeLayout(width, height);
     SDL_Color line = { 200, 200, 200, 255 };
     SDL_Color dim = { 110, 110, 110, 255 };
+    SDL_Color fg = { 28, 28, 28, 255 };
+    const int pad = 14;
 
     SDL_SetRenderDrawColor(renderer_, line.r, line.g, line.b, 255);
     SDL_RenderDrawRect(renderer_, &layout.panel);
@@ -584,25 +586,25 @@ void WeatherView::Render(int width, int height) {
     SDL_RenderDrawLine(renderer_, layout.panel.x, layout.weekly.y, layout.panel.x + layout.panel.w, layout.weekly.y);
 
     if (title_text_.texture) {
-        SDL_Rect dst{ layout.top.x + 14, layout.top.y + 10, title_text_.w, title_text_.h };
+        SDL_Rect dst{ layout.top.x + pad, layout.top.y + 8, title_text_.w, title_text_.h };
         SDL_RenderCopy(renderer_, title_text_.texture, nullptr, &dst);
     }
     if (status_text_.texture) {
         SDL_Rect dst{
-            layout.top.x + layout.top.w - status_text_.w - 14,
-            layout.top.y + 12,
+            layout.top.x + layout.top.w - status_text_.w - pad,
+            layout.top.y + 8,
             status_text_.w,
             status_text_.h
         };
         SDL_RenderCopy(renderer_, status_text_.texture, nullptr, &dst);
     }
 
-    int icon_size = std::max(56, layout.top.h - 56);
+    int icon_size = std::max(72, layout.top.h - 52);
     SDL_Rect top_icon{
-        layout.top.x + 16,
-        layout.top.y + 34,
+        layout.top.x + pad,
+        layout.top.y + 36,
         std::max(24, std::min(icon_size, layout.top.w / 4)),
-        std::max(24, std::min(icon_size, layout.top.h - 44))
+        std::max(24, std::min(icon_size, layout.top.h - 48))
     };
     if (!DrawWeatherSprite(current_code_, current_is_day_, top_icon)) {
         SDL_SetRenderDrawColor(renderer_, dim.r, dim.g, dim.b, 255);
@@ -610,7 +612,7 @@ void WeatherView::Render(int width, int height) {
     }
 
     int info_x = top_icon.x + top_icon.w + 18;
-    int info_max_w = std::max(32, layout.top.x + layout.top.w - info_x - 14);
+    int info_max_w = std::max(32, layout.top.x + layout.top.w - info_x - pad);
 
     if (temp_text_.texture) {
         SDL_Rect dst{ info_x, layout.top.y + 30, temp_text_.w, temp_text_.h };
@@ -619,7 +621,6 @@ void WeatherView::Render(int width, int height) {
     if (summary_text_.texture) {
         std::string summary = TruncateText(body_font_, summary_text_.text, info_max_w);
         if (summary != summary_text_.text) {
-            SDL_Color fg = { 28, 28, 28, 255 };
             CachedText tmp;
             UpdateText(tmp, body_font_, summary, fg);
             if (tmp.texture) {
@@ -649,15 +650,15 @@ void WeatherView::Render(int width, int height) {
     }
 
     if (hourly_title_text_.texture) {
-        SDL_Rect dst{ layout.hourly.x + 14, layout.hourly.y + 8, hourly_title_text_.w, hourly_title_text_.h };
+        SDL_Rect dst{ layout.hourly.x + pad, layout.hourly.y + 8, hourly_title_text_.w, hourly_title_text_.h };
         SDL_RenderCopy(renderer_, hourly_title_text_.texture, nullptr, &dst);
     }
 
     SDL_Rect hourly_body{
-        layout.hourly.x + 10,
-        layout.hourly.y + 28,
-        layout.hourly.w - 20,
-        layout.hourly.h - 34
+        layout.hourly.x + pad,
+        layout.hourly.y + 30,
+        layout.hourly.w - pad * 2,
+        layout.hourly.h - 36
     };
     if (hourly_entries_.empty()) {
         if (hourly_empty_text_.texture) {
@@ -695,9 +696,9 @@ void WeatherView::Render(int width, int height) {
 
             SDL_Rect icon_rect{
                 cell.x + (cell.w - 34) / 2,
-                cell.y + 22,
+                cell.y + 24,
                 34,
-                std::max(18, cell.h - 54)
+                std::max(18, cell.h - 58)
             };
             DrawWeatherSprite(hourly_entries_[i].code, hourly_entries_[i].is_day, icon_rect);
 
@@ -714,15 +715,15 @@ void WeatherView::Render(int width, int height) {
     }
 
     if (weekly_title_text_.texture) {
-        SDL_Rect dst{ layout.weekly.x + 14, layout.weekly.y + 8, weekly_title_text_.w, weekly_title_text_.h };
+        SDL_Rect dst{ layout.weekly.x + pad, layout.weekly.y + 8, weekly_title_text_.w, weekly_title_text_.h };
         SDL_RenderCopy(renderer_, weekly_title_text_.texture, nullptr, &dst);
     }
 
     SDL_Rect weekly_body{
-        layout.weekly.x + 10,
-        layout.weekly.y + 28,
-        layout.weekly.w - 20,
-        layout.weekly.h - 32
+        layout.weekly.x + pad,
+        layout.weekly.y + 30,
+        layout.weekly.w - pad * 2,
+        layout.weekly.h - 34
     };
     if (daily_entries_.empty()) {
         if (daily_empty_text_.texture) {
@@ -736,7 +737,7 @@ void WeatherView::Render(int width, int height) {
         }
     } else {
         int rows = std::min<int>(7, daily_entries_.size());
-        int row_h = std::max(18, weekly_body.h / std::max(1, rows));
+        int row_h = std::max(20, weekly_body.h / std::max(1, rows));
         for (int i = 0; i < rows; ++i) {
             SDL_Rect row{
                 weekly_body.x,
@@ -752,7 +753,7 @@ void WeatherView::Render(int width, int height) {
 
             if (i < static_cast<int>(daily_day_texts_.size()) && daily_day_texts_[i].texture) {
                 SDL_Rect dst{
-                    row.x + 4,
+                    row.x + 2,
                     row.y + (row.h - daily_day_texts_[i].h) / 2,
                     daily_day_texts_[i].w,
                     daily_day_texts_[i].h
@@ -760,12 +761,12 @@ void WeatherView::Render(int width, int height) {
                 SDL_RenderCopy(renderer_, daily_day_texts_[i].texture, nullptr, &dst);
             }
 
-            SDL_Rect icon_rect{ row.x + 72, row.y + 3, 20, std::max(12, row.h - 6) };
+            SDL_Rect icon_rect{ row.x + 70, row.y + 3, 20, std::max(12, row.h - 6) };
             DrawWeatherSprite(daily_entries_[i].code, true, icon_rect);
 
             if (i < static_cast<int>(daily_temp_texts_.size()) && daily_temp_texts_[i].texture) {
                 SDL_Rect dst{
-                    row.x + row.w - daily_temp_texts_[i].w - 4,
+                    row.x + row.w - daily_temp_texts_[i].w - 2,
                     row.y + (row.h - daily_temp_texts_[i].h) / 2,
                     daily_temp_texts_[i].w,
                     daily_temp_texts_[i].h
