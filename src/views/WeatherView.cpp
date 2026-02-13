@@ -11,6 +11,7 @@
 #include <cmath>
 #include <ctime>
 #include <iostream>
+#include <locale>
 #include <map>
 #include <sstream>
 #include <string>
@@ -137,6 +138,7 @@ std::string WeekdayShortFromDate(const std::string& date_iso) {
 
 std::string FormatDecimal1(double value) {
     std::ostringstream out;
+    out.imbue(std::locale::classic());
     out.setf(std::ios::fixed);
     out.precision(1);
     out << value;

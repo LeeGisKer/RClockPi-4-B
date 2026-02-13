@@ -11,6 +11,7 @@
 #include <cmath>
 #include <iomanip>
 #include <iostream>
+#include <locale>
 #include <sstream>
 #include <thread>
 
@@ -80,6 +81,7 @@ bool IsValidCoords(double latitude, double longitude) {
 
 std::string FormatDecimal1(double value) {
     std::ostringstream out;
+    out.imbue(std::locale::classic());
     out << std::fixed << std::setprecision(1) << value;
     return out.str();
 }
@@ -132,6 +134,7 @@ std::string WeatherCodeText(int code, bool is_day) {
 
 std::string BuildOpenMeteoUrl(const WeatherConfig& config) {
     std::ostringstream out;
+    out.imbue(std::locale::classic());
     out << "https://api.open-meteo.com/v1/forecast"
         << "?latitude=" << std::fixed << std::setprecision(5) << config.latitude
         << "&longitude=" << std::fixed << std::setprecision(5) << config.longitude
