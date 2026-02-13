@@ -138,10 +138,9 @@ std::string BuildOpenMeteoUrl(const WeatherConfig& config) {
     out << "https://api.open-meteo.com/v1/forecast"
         << "?latitude=" << std::fixed << std::setprecision(5) << config.latitude
         << "&longitude=" << std::fixed << std::setprecision(5) << config.longitude
-        << "&current=temperature_2m,weather_code,is_day,wind_speed_10m,time"
+        << "&current=temperature_2m,weather_code,is_day"
         << "&hourly=temperature_2m,weather_code"
-        << "&daily=weather_code,temperature_2m_max,temperature_2m_min"
-        << "&forecast_days=7"
+        << "&daily=temperature_2m_max,temperature_2m_min,weather_code"
         << "&timezone=auto";
     return out.str();
 }
