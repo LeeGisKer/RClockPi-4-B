@@ -7,11 +7,15 @@
 #include <array>
 #include <cmath>
 #include <cstdlib>
+#include <iomanip>
 #include <iostream>
+#include <locale>
+#include <sstream>
 #include <string>
 #include <vector>
 
 #include <SDL_image.h>
+#include <nlohmann/json.hpp>
 
 namespace {
 
@@ -236,6 +240,35 @@ std::string WeatherSummaryLine(EventStore* store) {
         line += " (cached)";
     }
     return line;
+}
+
+std::string FormatDecimal1(double value) {
+    std::ostringstream out;
+    out.imbue(std::locale::classic());
+    out << std::fixed << std::setprecision(1) << value;
+    return out.str();
+}
+
+std::string WeatherHighLow(EventStore* store) {
+    if (!store) {
+        return "";
+    }
+    std::string daily_json = store->GetMeta("weather_daily_json");
+    if (daily_json.empty()) {
+        return "";
+    }
+    nlohmann::json daily = nlohmann::json::parse(daily_json, nullptr, false);
+    if (daily.is_discarded() || !daily.is_array() || daily.empty() || !daily[0].is_object()) {
+        return "";
+    }
+    const auto& item = daily[0];
+    if (!item.contains("max_c") || !item.contains("min_c") ||
+        !item["max_c"].is_number() || !item["min_c"].is_number()) {
+        return "";
+    }
+    double max_c = item["max_c"].get<double>();
+    double min_c = item["min_c"].get<double>();
+    return "H " + FormatDecimal1(max_c) + " C  L " + FormatDecimal1(min_c) + " C";
 }
 
 std::string JoinPath(const std::string& dir, const std::string& file) {
@@ -473,8 +506,27 @@ void ClockView::UpdateCache(int width, int height, int64_t now_ts) {
     }
     next_summary = TruncateText(info_font_, next_summary, layout.right_max_w);
 
-    int bottom_cell_max_w = std::max(80, layout.panel.w / 2 - 36);
-    std::string weather_summary = TruncateText(info_font_, WeatherSummaryLine(store_), bottom_cell_max_w);
+    int bottom_cell_max_w = std::max(100, layout.panel.w / 2 - 36);
+    std::string weather_status = store_ ? store_->GetMeta("weather_status") : "";
+    std::string weather_temp = store_ ? store_->GetMeta("weather_temp_c") : "";
+    std::string weather_desc = store_ ? store_->GetMeta("weather_summary") : "";
+    std::string weather_main;
+    if (!weather_temp.empty()) {
+        weather_main = weather_temp + " C";
+    }
+    if (!weather_desc.empty()) {
+        if (!weather_main.empty()) {
+            weather_main += " ";
+        }
+        weather_main += weather_desc;
+    }
+    if (weather_main.empty()) {
+        weather_main = "Weather unavailable";
+    } else if (weather_status == "offline") {
+        weather_main += " (cached)";
+    }
+    std::string weather_summary = TruncateText(date_font_, weather_main, bottom_cell_max_w);
+    std::string weather_hilo = TruncateText(info_font_, WeatherHighLow(store_), bottom_cell_max_w);
 
     std::string today_summary = (today_events.size() > 0)
         ? ("Today: " + std::to_string(static_cast<int>(today_events.size())) + " events")
@@ -495,20 +547,25 @@ void ClockView::UpdateCache(int width, int height, int64_t now_ts) {
 
     std::array<std::string, 4> labels = {
         "Today",
-        "Weather",
+        weather_summary,
         (all_day_today > 0) ? "All day" : "",
         (remaining_today > 0) ? "Remaining" : ""
     };
     std::array<std::string, 4> values = {
         TruncateText(info_font_, (today_events.size() > 0) ? (std::to_string(static_cast<int>(today_events.size())) + " events") : "Free", bottom_cell_max_w),
-        weather_summary,
+        weather_hilo,
         (all_day_today > 0) ? (std::to_string(all_day_today) + " today") : "",
         (remaining_today > 0) ? (std::to_string(remaining_today) + " today") : ""
     };
 
     for (size_t i = 0; i < labels.size(); ++i) {
-        UpdateText(cell_labels_[i], info_font_, labels[i], dim);
-        UpdateText(cell_values_[i], info_font_, values[i], fg);
+        if (i == 1) {
+            UpdateText(cell_labels_[i], date_font_, labels[i], fg);
+            UpdateText(cell_values_[i], info_font_, values[i], dim);
+        } else {
+            UpdateText(cell_labels_[i], info_font_, labels[i], dim);
+            UpdateText(cell_values_[i], info_font_, values[i], fg);
+        }
     }
 }
 
