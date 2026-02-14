@@ -15,5 +15,9 @@
   "weather_longitude": -117.1611,
   "weather_sync_interval_sec": 900,
   "weather_sprite_dir": "../assets/weather",
-  "sprite_dir": "../assets/sprites"
+  "sprite_dir": "../assets/sprites",
+  "view_rotation_enabled": true,
+  "view_rotation_clock_sec": 90,
+  "view_rotation_calendar_sec": 45,
+  "view_rotation_weather_sec": 45
 }

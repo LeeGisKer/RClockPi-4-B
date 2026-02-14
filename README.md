@@ -92,6 +92,8 @@ Copy `config/config.example.json` to `config/config.json` and edit it:
 - `weather_sync_interval_sec`: weather refresh interval (seconds)
 - `weather_sprite_dir`: folder with weather condition sprites
 - `sprite_dir`: folder for time-of-day sprites (default `./assets/sprites`)
+- `view_rotation_enabled`: auto-rotate between views
+- `view_rotation_clock_sec`, `view_rotation_calendar_sec`, `view_rotation_weather_sec`: per-view rotation time (seconds)
 - `night_mode_enabled`, `night_start_hour`, `night_end_hour`, `night_dim_alpha`: dim the screen during night hours
 - Keep `ics_url` private; it grants read access to the calendar.
 - `ICS_URL` environment variable overrides `ics_url` from config when set.

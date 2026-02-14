@@ -96,6 +96,10 @@ struct AppConfig {
     int weather_sync_interval_sec = 900;
     std::string weather_sprite_dir = "./assets/weather";
     std::string sprite_dir = "./assets/sprites";
+    bool view_rotation_enabled = false;
+    int view_rotation_clock_sec = 90;
+    int view_rotation_calendar_sec = 45;
+    int view_rotation_weather_sec = 45;
 };
 
 bool LoadConfig(const std::string& path, AppConfig* out) {
@@ -130,6 +134,10 @@ bool LoadConfig(const std::string& path, AppConfig* out) {
     out->weather_sync_interval_sec = j.value("weather_sync_interval_sec", out->weather_sync_interval_sec);
     out->weather_sprite_dir = j.value("weather_sprite_dir", out->weather_sprite_dir);
     out->sprite_dir = j.value("sprite_dir", out->sprite_dir);
+    out->view_rotation_enabled = j.value("view_rotation_enabled", out->view_rotation_enabled);
+    out->view_rotation_clock_sec = j.value("view_rotation_clock_sec", out->view_rotation_clock_sec);
+    out->view_rotation_calendar_sec = j.value("view_rotation_calendar_sec", out->view_rotation_calendar_sec);
+    out->view_rotation_weather_sec = j.value("view_rotation_weather_sec", out->view_rotation_weather_sec);
 
     return true;
 }
@@ -267,6 +275,7 @@ int main(int argc, char** argv) {
         ViewMode current_view = ViewMode::Clock;
 
         auto last_input = std::chrono::steady_clock::now();
+        auto last_view_change = last_input;
         bool capture_next_frame = false;
 
         bool running = true;
@@ -277,6 +286,7 @@ int main(int argc, char** argv) {
                     running = false;
                 } else if (ev.type == SDL_KEYDOWN) {
                     last_input = std::chrono::steady_clock::now();
+                    last_view_change = last_input;
                     switch (ev.key.keysym.sym) {
                         case SDLK_ESCAPE:
                             running = false;
@@ -289,6 +299,7 @@ int main(int argc, char** argv) {
                             } else {
                                 current_view = ViewMode::Clock;
                             }
+                            last_view_change = std::chrono::steady_clock::now();
                             break;
                         case SDLK_s:
                             capture_next_frame = true;
@@ -338,6 +349,31 @@ int main(int argc, char** argv) {
             auto idle_sec = std::chrono::duration_cast<std::chrono::seconds>(now - last_input).count();
             if (idle_sec >= config.idle_threshold_sec) {
                 current_view = ViewMode::Clock;
+                last_view_change = now;
+            }
+
+            if (config.view_rotation_enabled && idle_sec < config.idle_threshold_sec) {
+                int duration_sec = 0;
+                if (current_view == ViewMode::Clock) {
+                    duration_sec = config.view_rotation_clock_sec;
+                } else if (current_view == ViewMode::Calendar) {
+                    duration_sec = config.view_rotation_calendar_sec;
+                } else {
+                    duration_sec = config.view_rotation_weather_sec;
+                }
+                if (duration_sec > 0) {
+                    auto view_elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - last_view_change).count();
+                    if (view_elapsed >= duration_sec) {
+                        if (current_view == ViewMode::Clock) {
+                            current_view = ViewMode::Calendar;
+                        } else if (current_view == ViewMode::Calendar) {
+                            current_view = ViewMode::Weather;
+                        } else {
+                            current_view = ViewMode::Clock;
+                        }
+                        last_view_change = now;
+                    }
+                }
             }
 
             SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
