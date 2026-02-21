@@ -6,5 +6,7 @@ build/
 *.tmp
 data/
 config/token.json
+config/config.local.json
+config/config.json
 preview.bmp
 assets/sprites/

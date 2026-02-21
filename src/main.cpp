@@ -98,21 +98,10 @@ struct AppConfig {
     std::string sprite_dir = "./assets/sprites";
 };
 
-bool LoadConfig(const std::string& path, AppConfig* out) {
-    std::ifstream file(path);
-    if (!file.is_open()) {
-        std::cerr << "Failed to open config: " << path << "\n";
-        return false;
+void ApplyConfig(const nlohmann::json& j, AppConfig* out) {
+    if (!out) {
+        return;
     }
-
-    nlohmann::json j;
-    try {
-        file >> j;
-    } catch (const std::exception& ex) {
-        std::cerr << "Failed to parse config: " << ex.what() << "\n";
-        return false;
-    }
-
     out->sync_interval_sec = j.value("sync_interval_sec", out->sync_interval_sec);
     out->time_window_days = j.value("time_window_days", out->time_window_days);
     out->idle_threshold_sec = j.value("idle_threshold_sec", out->idle_threshold_sec);
@@ -130,6 +119,42 @@ bool LoadConfig(const std::string& path, AppConfig* out) {
     out->weather_sync_interval_sec = j.value("weather_sync_interval_sec", out->weather_sync_interval_sec);
     out->weather_sprite_dir = j.value("weather_sprite_dir", out->weather_sprite_dir);
     out->sprite_dir = j.value("sprite_dir", out->sprite_dir);
+}
+
+bool LoadConfig(const std::string& path, AppConfig* out) {
+    std::ifstream file(path);
+    if (!file.is_open()) {
+        std::cerr << "Failed to open config: " << path << "\n";
+        return false;
+    }
+
+    nlohmann::json j;
+    try {
+        file >> j;
+    } catch (const std::exception& ex) {
+        std::cerr << "Failed to parse config: " << ex.what() << "\n";
+        return false;
+    }
+
+    ApplyConfig(j, out);
+
+    std::filesystem::path base_path(path);
+    std::filesystem::path local_path = base_path.parent_path() / "config.local.json";
+    if (std::filesystem::exists(local_path)) {
+        std::ifstream local_file(local_path.string());
+        if (!local_file.is_open()) {
+            std::cerr << "Failed to open local config: " << local_path.string() << "\n";
+            return false;
+        }
+        nlohmann::json local_json;
+        try {
+            local_file >> local_json;
+        } catch (const std::exception& ex) {
+            std::cerr << "Failed to parse local config: " << ex.what() << "\n";
+            return false;
+        }
+        ApplyConfig(local_json, out);
+    }
 
     return true;
 }
