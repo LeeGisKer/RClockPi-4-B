@@ -79,7 +79,7 @@ Optional launcher env vars:
 
 ## Config
 
-Copy `config/config.example.json` to `config/config.json` and edit it (this file is git-ignored):
+Copy `config/config.example.json` to `config/config.json` and edit it:
 
 - `font_path`: path to a TTF font file (required)
 - `db_path`: SQLite cache path
@@ -94,6 +94,7 @@ Copy `config/config.example.json` to `config/config.json` and edit it (this file
 - `sprite_dir`: folder for time-of-day sprites (default `./assets/sprites`)
 - `night_mode_enabled`, `night_start_hour`, `night_end_hour`, `night_dim_alpha`: dim the screen during night hours
 - Keep `ics_url` private; it grants read access to the calendar.
+- `ICS_URL` environment variable overrides `ics_url` from config when set.
 
 ## Offline behavior
 
@@ -141,7 +142,7 @@ Look for `Under-voltage`, `thermal`, `shutdown`, `kernel panic`.
 ## Using a secret iCal (ICS) URL
 
 1) Copy your calendar's **secret iCal URL** from Google Calendar settings.
-2) Set `ics_url` in `config/config.json`.
+2) Set `ics_url` in `config/config.json` (or export `ICS_URL`).
 3) Set `mock_mode` to `false`.
 
 ## Mock mode

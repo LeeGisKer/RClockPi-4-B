@@ -1,0 +1,19 @@
+{
+  "sync_interval_sec": 120,
+  "time_window_days": 14,
+  "idle_threshold_sec": 30,
+  "night_mode_enabled": true,
+  "night_start_hour": 21,
+  "night_end_hour": 6,
+  "night_dim_alpha": 110,
+  "font_path": "../assets/Minecraft.ttf",
+  "db_path": "./data/calendar.db",
+  "mock_mode": false,
+  "ics_url": "",
+  "weather_enabled": true,
+  "weather_latitude": 32.7157,
+  "weather_longitude": -117.1611,
+  "weather_sync_interval_sec": 900,
+  "weather_sprite_dir": "../assets/weather",
+  "sprite_dir": "../assets/sprites"
+}
