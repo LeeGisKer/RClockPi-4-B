@@ -437,6 +437,8 @@ void CalendarSyncService::Run() {
     bool seeded = false;
     bool first_online_sync_done = config_.mock_mode || Trim(config_.ics_url).empty();
     bool internet_down_detected = false;
+    int consecutive_failures = 0;
+    bool cache_fallback = false;
     while (running_) {
         int64_t now_ts = TimeUtil::NowTs();
         bool ok = false;
@@ -477,6 +479,16 @@ void CalendarSyncService::Run() {
 
         if (ok && sync_status == "online") {
             first_online_sync_done = true;
+            consecutive_failures = 0;
+            cache_fallback = false;
+        } else if (!ok && !config_.mock_mode && !Trim(config_.ics_url).empty()) {
+            consecutive_failures++;
+            if (consecutive_failures >= 5) {
+                cache_fallback = true;
+            }
+            if (cache_fallback) {
+                sync_status = "cache";
+            }
         }
 
         store.SetMeta("last_sync_status", sync_status);
