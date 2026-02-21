@@ -17,7 +17,6 @@
 #include <chrono>
 #include <filesystem>
 #include <fstream>
-#include <cstdlib>
 #include <cctype>
 #include <iostream>
 
@@ -170,10 +169,6 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    const char* env_ics = std::getenv("ICS_URL");
-    if (env_ics && env_ics[0] != '\0') {
-        config.ics_url = env_ics;
-    }
     config.ics_url = Trim(config.ics_url);
     if (!config.mock_mode && config.ics_url.empty()) {
         std::cerr << "No ICS URL configured. Running in cache-only mode.\n";

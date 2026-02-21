@@ -94,8 +94,6 @@ Copy `config/config.example.json` to `config/config.json` and edit it (this file
 - `sprite_dir`: folder for time-of-day sprites (default `./assets/sprites`)
 - `night_mode_enabled`, `night_start_hour`, `night_end_hour`, `night_dim_alpha`: dim the screen during night hours
 - Keep `ics_url` private; it grants read access to the calendar.
-- `ICS_URL` environment variable overrides `ics_url` from config when set.
-- For secrets (like `ics_url`), put them in `config/config.local.json` (auto-loaded if present). This file is git-ignored.
 
 ## Offline behavior
 
@@ -143,7 +141,7 @@ Look for `Under-voltage`, `thermal`, `shutdown`, `kernel panic`.
 ## Using a secret iCal (ICS) URL
 
 1) Copy your calendar's **secret iCal URL** from Google Calendar settings.
-2) Set `ics_url` in `config/config.local.json` (or export `ICS_URL`).
+2) Set `ics_url` in `config/config.json`.
 3) Set `mock_mode` to `false`.
 
 ## Mock mode
