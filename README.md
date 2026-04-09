@@ -22,7 +22,19 @@ sudo apt install -y \
 2) Put a TTF font on the Pi and update `config/config.json`:
    - Recommended: copy a font into `assets/` and set `"font_path": "./assets/DejaVuSans.ttf"`.
 
-3) Build:
+3) Set the secret calendar URL as an environment variable:
+
+```bash
+export ICS_URL="https://calendar.google.com/calendar/ical/.../basic.ics"
+```
+
+PowerShell:
+
+```powershell
+$env:ICS_URL = "https://calendar.google.com/calendar/ical/.../basic.ics"
+```
+
+4) Build:
 
 ```bash
 mkdir -p build
@@ -31,7 +43,7 @@ cmake ..
 cmake --build . -j4
 ```
 
-4) Run (fullscreen):
+5) Run (fullscreen):
 
 ```bash
 ./run_clock.sh
@@ -86,20 +98,20 @@ Copy `config/config.example.json` to `config/config.json` and edit it:
 - `mock_mode`: `true` to seed sample events for UI testing
 - `idle_threshold_sec`: seconds before returning to Clock view when idle
 - `sync_interval_sec`, `time_window_days`: sync behavior
-- `ics_url`: secret iCal (ICS) URL to sync your calendar (optional; empty = cache-only mode)
 - `weather_enabled`: enable live weather sync
 - `weather_latitude`, `weather_longitude`: coordinates for weather lookup
 - `weather_sync_interval_sec`: weather refresh interval (seconds)
 - `weather_sprite_dir`: folder with weather condition sprites
 - `sprite_dir`: folder for time-of-day sprites (default `./assets/sprites`)
 - `night_mode_enabled`, `night_start_hour`, `night_end_hour`, `night_dim_alpha`: dim the screen during night hours
-- Keep `ics_url` private; it grants read access to the calendar.
-- `ICS_URL` environment variable overrides `ics_url` from config when set.
+- `sprite_dir`: folder for time-of-day sprites (default `./assets/sprites`)
+- `night_mode_enabled`, `night_start_hour`, `night_end_hour`, `night_dim_alpha`: dim the screen during night hours
+- `ICS_URL` is not stored in `config.json`; set it in the environment instead.
 
 ## Offline behavior
 
 - The app keeps events in SQLite and continues running if internet is down.
-- If `ics_url` is not configured (and `mock_mode` is `false`), the app starts in cache-only mode.
+- If `ICS_URL` is not configured and `mock_mode` is `false`, calendar sync is unavailable.
 - Increase `time_window_days` if you need to prefetch more days before going offline.
 - Weather uses Open-Meteo (no API key); if internet drops it shows the last cached weather data.
 
@@ -142,8 +154,9 @@ Look for `Under-voltage`, `thermal`, `shutdown`, `kernel panic`.
 ## Using a secret iCal (ICS) URL
 
 1) Copy your calendar's **secret iCal URL** from Google Calendar settings.
-2) Set `ics_url` in `config/config.json` (or export `ICS_URL`).
-3) Set `mock_mode` to `false`.
+2) Export it as `ICS_URL` in the shell, service, or launcher that starts the app.
+3) Use `.env.example` only as a local template if your own launcher loads `.env`; do not commit `.env`.
+4) Set `"mock_mode": false` in `config/config.json`.
 
 ## Mock mode
 

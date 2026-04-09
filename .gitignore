@@ -5,6 +5,8 @@ build/
 *.log
 *.tmp
 data/
-config/token.json
+.env
+.env.*
+!.env.example
 preview.bmp
 assets/sprites/
