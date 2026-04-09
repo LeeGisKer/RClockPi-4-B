@@ -1,8 +1,73 @@
-# Raspberry Pi Calendar Kiosk
+# RClockPi
 
-Fullscreen smart clock + calendar for Raspberry Pi OS using SDL2 + SDL2_ttf.
+**A fullscreen Raspberry Pi dashboard that turns wall-mounted hardware into a reliable calendar, clock, and weather display.**
 
-## Dependencies (Raspberry Pi OS)
+## Problem -> Solution
+
+**Problem**
+- Shared spaces need a glanceable display for time, upcoming events, and weather.
+- Browser-based dashboards are often fragile in kiosk setups, depend on constant connectivity, and expose too much operational overhead.
+
+**Solution**
+- `RClockPi` is a native SDL2 kiosk app built for Raspberry Pi OS.
+- It renders fullscreen views locally, syncs calendar and weather data in the background, caches data in SQLite, and keeps running even when connectivity is unstable.
+
+## Demo
+
+- Live demo: `[Add deployed video / GIF link here]`
+- Screenshots: `[Add screenshot folder or portfolio link here]`
+- Resume one-liner: `Built a Raspberry Pi kiosk dashboard with offline caching, background sync, and fullscreen native rendering.`
+
+## Features
+
+- **Always-on kiosk UX**: fullscreen interface optimized for wall displays and passive viewing.
+- **Offline resilience**: events and weather are cached locally in SQLite so the device remains useful during outages.
+- **Low-friction operations**: `run_clock.sh` builds, launches, logs, restarts on crashes, and prevents idle sleep.
+- **Secure config model**: sensitive calendar access stays in environment variables, not in tracked config.
+- **Multiple information modes**: clock, calendar, and weather views are navigable from one lightweight app.
+- **Input hardening**: config, ICS input, and persisted event data are validated to reduce malformed-data failures.
+
+## Architecture
+
+```mermaid
+flowchart LR
+    User["User / Wall Display"] --> App["RClockPi SDL App"]
+
+    App --> Views["ClockView\nCalendarView\nWeatherView"]
+    App --> CalendarSync["CalendarSyncService"]
+    App --> WeatherSync["WeatherSyncService"]
+
+    CalendarSync --> ICS["Private ICS Feed\n(via ICS_URL env var)"]
+    WeatherSync --> WeatherAPI["Open-Meteo API"]
+
+    CalendarSync --> Store["SQLite EventStore"]
+    WeatherSync --> Store
+    Store --> Views
+
+    Config["config.json\n(non-secret settings)"] --> App
+    Assets["Fonts + Sprites"] --> Views
+```
+
+## Tech Stack
+
+- **C++17**: predictable performance and low runtime overhead for embedded/kiosk deployment.
+- **SDL2 + SDL2_ttf + SDL2_image**: native fullscreen rendering, font loading, and image/sprite support.
+- **libcurl**: background HTTP fetches for calendar and weather synchronization.
+- **SQLite**: lightweight local persistence for offline-first reads.
+- **nlohmann/json**: simple, readable config parsing for kiosk settings.
+- **CMake**: portable build system for Raspberry Pi and Linux environments.
+- **Bash launcher**: operational wrapper for build, restart, logging, and kiosk-friendly runtime behavior.
+
+## Installation
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/LeeGisKer/RClockPi-4-B.git
+cd RClockPi-4-B
+```
+
+### 2. Install dependencies on Raspberry Pi OS / Debian
 
 ```bash
 sudo apt update
@@ -10,154 +75,84 @@ sudo apt install -y \
   build-essential cmake pkg-config \
   libsdl2-dev libsdl2-ttf-dev libsdl2-image-dev \
   libcurl4-openssl-dev libsqlite3-dev \
-  nlohmann-json3-dev \
-  ca-certificates \
-  fonts-dejavu-core
+  nlohmann-json3-dev ca-certificates fonts-dejavu-core
 ```
 
-## Raspberry Pi run guide
-
-1) Clone or copy the project onto the Pi.
-
-2) Put a TTF font on the Pi and update `config/config.json`:
-   - Recommended: copy a font into `assets/` and set `"font_path": "./assets/DejaVuSans.ttf"`.
-
-3) Set the secret calendar URL as an environment variable:
+### 3. Create local config
 
 ```bash
-export ICS_URL="https://calendar.google.com/calendar/ical/.../basic.ics"
+cp config/config.example.json config/config.json
+```
+
+Update `config/config.json` as needed:
+- `font_path`: path to a `.ttf` font
+- `db_path`: local SQLite file
+- `mock_mode`: use sample data for UI testing
+- `weather_enabled`, `weather_latitude`, `weather_longitude`: enable live weather
+- `sprite_dir`, `weather_sprite_dir`: artwork directories
+
+### 4. Export the calendar secret
+
+Linux/macOS:
+
+```bash
+export ICS_URL="https://calendar.google.com/calendar/ical/your-secret/basic.ics"
 ```
 
 PowerShell:
 
 ```powershell
-$env:ICS_URL = "https://calendar.google.com/calendar/ical/.../basic.ics"
+$env:ICS_URL = "https://calendar.google.com/calendar/ical/your-secret/basic.ics"
 ```
 
-4) Build:
+## Usage
+
+### Option A: Build and run through the kiosk launcher
 
 ```bash
-mkdir -p build
-cd build
-cmake ..
-cmake --build . -j4
-```
-
-5) Run (fullscreen):
-
-```bash
+chmod +x run_clock.sh
 ./run_clock.sh
 ```
 
-Keys: `Space` cycles views (Clock -> Calendar -> Weather), `Esc` quits, `S` saves a screenshot to `data/preview.bmp`.
-
-### Common Pi notes
-
-- If SDL fails to open a display, run from the desktop session or try:
+### Option B: Build manually
 
 ```bash
-export SDL_VIDEODRIVER=kmsdrm
+cmake -S . -B build
+cmake --build build -j4
+./build/rpi_calendar config/config.json
 ```
 
-- For kiosk-style boot, add a systemd service that runs the binary on startup.
+### Runtime controls
 
-## Build
+- `Space`: cycle `Clock -> Calendar -> Weather`
+- `Esc`: quit
+- `S`: save a screenshot to `data/preview.bmp`
+
+### Useful launcher environment variables
 
 ```bash
-mkdir -p build
-cd build
-cmake ..
-cmake --build . -j4
+export RESTART_ON_EXIT=1
+export RESTART_DELAY_SEC=2
+export LOG_FILE="./logs/rpi_calendar.log"
 ```
 
-## Run
+## Challenges & Learnings
 
-```bash
-./run_clock.sh
-```
+- **Designing for unreliable connectivity**: caching calendar and weather data locally makes the kiosk useful beyond the network happy path.
+- **Separating secrets from config**: moving the private ICS URL to environment variables avoids leaking access in tracked files.
+- **Balancing UI simplicity with operational reliability**: a kiosk app needs more than rendering; restart behavior, logging, and screen-wake handling matter in production.
+- **Native app ergonomics on constrained hardware**: SDL2 provides direct control, but it also requires careful resource handling and explicit dependency setup.
 
-The app runs fullscreen by default. Press `Esc` to quit.
+## Future Improvements
 
-`run_clock.sh` behavior:
-- Disables X11 screen blanking/DPMS when available.
-- Uses `systemd-inhibit` (when installed) to block idle sleep/shutdown while the app is running.
-- Restarts the app automatically if it exits unexpectedly.
-- Writes logs to `logs/rpi_calendar.log`.
+- Add systemd service files for one-command boot-to-kiosk deployment.
+- Restrict redirect handling and path resolution further for stricter security posture.
+- Add automated tests for config validation, ICS parsing, and persistence logic.
+- Support multiple calendars and richer filtering for family/team scheduling use cases.
+- Add a polished demo video and screenshots for portfolio and recruiter review.
 
-Optional launcher env vars:
-- `RESTART_ON_EXIT=0` disable auto-restart loop
-- `RESTART_DELAY_SEC=2` seconds before restart
-- `LOG_FILE=/path/to/file.log` custom log path
+## Project Snapshot
 
-## Config
-
-Copy `config/config.example.json` to `config/config.json` and edit it:
-
-- `font_path`: path to a TTF font file (required)
-- `db_path`: SQLite cache path
-- `mock_mode`: `true` to seed sample events for UI testing
-- `idle_threshold_sec`: seconds before returning to Clock view when idle
-- `sync_interval_sec`, `time_window_days`: sync behavior
-- `weather_enabled`: enable live weather sync
-- `weather_latitude`, `weather_longitude`: coordinates for weather lookup
-- `weather_sync_interval_sec`: weather refresh interval (seconds)
-- `weather_sprite_dir`: folder with weather condition sprites
-- `sprite_dir`: folder for time-of-day sprites (default `./assets/sprites`)
-- `night_mode_enabled`, `night_start_hour`, `night_end_hour`, `night_dim_alpha`: dim the screen during night hours
-- `sprite_dir`: folder for time-of-day sprites (default `./assets/sprites`)
-- `night_mode_enabled`, `night_start_hour`, `night_end_hour`, `night_dim_alpha`: dim the screen during night hours
-- `ICS_URL` is not stored in `config.json`; set it in the environment instead.
-
-## Offline behavior
-
-- The app keeps events in SQLite and continues running if internet is down.
-- If `ICS_URL` is not configured and `mock_mode` is `false`, calendar sync is unavailable.
-- Increase `time_window_days` if you need to prefetch more days before going offline.
-- Weather uses Open-Meteo (no API key); if internet drops it shows the last cached weather data.
-
-## Weather setup
-
-1) In `config/config.json`, set:
-   - `"weather_enabled": true`
-   - `"weather_latitude": <your-latitude>`
-   - `"weather_longitude": <your-longitude>`
-2) Keep `"weather_sync_interval_sec"` around `600-1800` for kiosk use.
-3) Add your custom sprites to `weather_sprite_dir` using these filenames:
-   - `clear.png`, `clear_night.png`, `mostly_clear.png`, `partly_cloudy.png`
-   - `overcast.png`, `fog.png`, `drizzle.png`, `rain.png`
-   - `snow.png`, `showers.png`, `thunder.png`, `unknown.png`
-4) Restart the app and press `Space` until the Weather page is visible.
-5) The Weather page shows current conditions, hourly forecast, and 7-day forecast.
-
-## If the Pi really powers off after hours
-
-If the whole Raspberry Pi loses power (not just a blank screen), this is usually hardware/power/thermal related:
-
-1) Check undervoltage / throttling:
-```bash
-vcgencmd get_throttled
-```
-If non-zero bits appear often, use a stronger PSU/cable.
-
-2) Check temperature while running:
-```bash
-vcgencmd measure_temp
-```
-Sustained high temperature can trigger instability.
-
-3) Check reboot/shutdown reasons:
-```bash
-journalctl -b -1 -e
-```
-Look for `Under-voltage`, `thermal`, `shutdown`, `kernel panic`.
-
-## Using a secret iCal (ICS) URL
-
-1) Copy your calendar's **secret iCal URL** from Google Calendar settings.
-2) Export it as `ICS_URL` in the shell, service, or launcher that starts the app.
-3) Use `.env.example` only as a local template if your own launcher loads `.env`; do not commit `.env`.
-4) Set `"mock_mode": false` in `config/config.json`.
-
-## Mock mode
-
-Set `"mock_mode": true` to insert sample events into the SQLite cache on startup. This is enough to test the UI without Google Calendar.
+- **Domain**: embedded UI / kiosk software
+- **Primary use case**: always-on household or office information display
+- **Key engineering themes**: offline-first caching, background sync, native rendering, secure configuration
