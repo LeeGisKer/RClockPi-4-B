@@ -3,10 +3,46 @@
 #include "util/TimeUtil.h"
 
 #include <sqlite3.h>
+#include <cctype>
 #include <iostream>
 #include <memory>
 
 namespace {
+
+bool ContainsUnsafeText(const std::string& value) {
+    for (char c : value) {
+        unsigned char uc = static_cast<unsigned char>(c);
+        if (uc < 32 || uc == 127) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool IsSafeField(const std::string& value, size_t max_size, bool allow_empty) {
+    if (!allow_empty && value.empty()) {
+        return false;
+    }
+    return value.size() <= max_size && !ContainsUnsafeText(value);
+}
+
+bool IsValidEventRecord(const EventRecord& ev) {
+    if (!IsSafeField(ev.id, 255, false) ||
+        !IsSafeField(ev.calendar_id, 32, false) ||
+        !IsSafeField(ev.title, 160, false) ||
+        !IsSafeField(ev.location, 160, true) ||
+        !IsSafeField(ev.status, 32, false)) {
+        return false;
+    }
+    if (ev.start_ts < 0 || ev.end_ts < ev.start_ts || ev.updated_ts < 0) {
+        return false;
+    }
+    return true;
+}
+
+bool IsValidMetaEntry(const std::string& key, const std::string& value) {
+    return IsSafeField(key, 64, false) && IsSafeField(value, 256, true);
+}
 
 struct StmtDeleter {
     void operator()(sqlite3_stmt* stmt) const {
@@ -95,6 +131,11 @@ bool EventStore::InitSchema() {
 }
 
 bool EventStore::UpsertEvent(const EventRecord& ev) {
+    if (!IsValidEventRecord(ev)) {
+        std::cerr << "SQLite upsert rejected malformed event input.\n";
+        return false;
+    }
+
     const char* sql =
         "INSERT INTO events(id, calendar_id, title, start_ts, end_ts, all_day, location, updated_ts, status)"
         " VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)"
@@ -254,6 +295,11 @@ bool EventStore::DeleteStaleInWindow(const std::string& calendar_id, int64_t win
 }
 
 bool EventStore::SetMeta(const std::string& key, const std::string& value) {
+    if (!IsValidMetaEntry(key, value)) {
+        std::cerr << "SQLite set meta rejected malformed input.\n";
+        return false;
+    }
+
     const char* sql =
         "INSERT INTO meta(key, value) VALUES(?, ?)"
         " ON CONFLICT(key) DO UPDATE SET value=excluded.value";

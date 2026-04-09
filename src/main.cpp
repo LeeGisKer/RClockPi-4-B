@@ -15,13 +15,133 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cctype>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <cstdlib>
-#include <cctype>
 #include <iostream>
+#include <sstream>
 
 namespace {
+
+constexpr size_t kMaxConfigBytes = 64 * 1024;
+constexpr size_t kMaxPathBytes = 512;
+constexpr size_t kMaxUrlBytes = 2048;
+
+std::string Trim(const std::string& value) {
+    size_t start = 0;
+    while (start < value.size() && std::isspace(static_cast<unsigned char>(value[start]))) {
+        ++start;
+    }
+    size_t end = value.size();
+    while (end > start && std::isspace(static_cast<unsigned char>(value[end - 1]))) {
+        --end;
+    }
+    return value.substr(start, end - start);
+}
+
+bool ContainsControlChars(const std::string& value) {
+    for (char c : value) {
+        unsigned char uc = static_cast<unsigned char>(c);
+        if (uc < 32 || uc == 127) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool ReadFileWithLimit(const std::string& path, size_t max_bytes, std::string* out) {
+    std::ifstream file(path, std::ios::binary);
+    if (!file.is_open()) {
+        std::cerr << "Failed to open config: " << path << "\n";
+        return false;
+    }
+
+    file.seekg(0, std::ios::end);
+    std::streamoff size = file.tellg();
+    if (size < 0) {
+        std::cerr << "Failed to determine config size.\n";
+        return false;
+    }
+    if (static_cast<size_t>(size) > max_bytes) {
+        std::cerr << "Config file is too large.\n";
+        return false;
+    }
+
+    file.seekg(0, std::ios::beg);
+    std::ostringstream buffer;
+    buffer << file.rdbuf();
+    *out = buffer.str();
+    return true;
+}
+
+bool ReadIntInRange(const nlohmann::json& j, const char* key, int min_value, int max_value, int* out) {
+    if (!j.contains(key)) {
+        return true;
+    }
+    const auto& value = j.at(key);
+    if (!value.is_number_integer()) {
+        std::cerr << "Config key '" << key << "' must be an integer.\n";
+        return false;
+    }
+    int parsed = value.get<int>();
+    if (parsed < min_value || parsed > max_value) {
+        std::cerr << "Config key '" << key << "' is out of range.\n";
+        return false;
+    }
+    *out = parsed;
+    return true;
+}
+
+bool ReadBool(const nlohmann::json& j, const char* key, bool* out) {
+    if (!j.contains(key)) {
+        return true;
+    }
+    const auto& value = j.at(key);
+    if (!value.is_boolean()) {
+        std::cerr << "Config key '" << key << "' must be a boolean.\n";
+        return false;
+    }
+    *out = value.get<bool>();
+    return true;
+}
+
+bool ReadDoubleInRange(const nlohmann::json& j, const char* key, double min_value, double max_value, double* out) {
+    if (!j.contains(key)) {
+        return true;
+    }
+    const auto& value = j.at(key);
+    if (!value.is_number()) {
+        std::cerr << "Config key '" << key << "' must be numeric.\n";
+        return false;
+    }
+    double parsed = value.get<double>();
+    if (!std::isfinite(parsed) || parsed < min_value || parsed > max_value) {
+        std::cerr << "Config key '" << key << "' is out of range.\n";
+        return false;
+    }
+    *out = parsed;
+    return true;
+}
+
+bool ReadPathString(const nlohmann::json& j, const char* key, size_t max_bytes, std::string* out) {
+    if (!j.contains(key)) {
+        return true;
+    }
+    const auto& value = j.at(key);
+    if (!value.is_string()) {
+        std::cerr << "Config key '" << key << "' must be a string.\n";
+        return false;
+    }
+    std::string parsed = Trim(value.get<std::string>());
+    if (parsed.empty() || parsed.size() > max_bytes || ContainsControlChars(parsed)) {
+        std::cerr << "Config key '" << key << "' is malformed or too large.\n";
+        return false;
+    }
+    *out = parsed;
+    return true;
+}
 
 std::filesystem::path ResolvePath(const std::filesystem::path& config_path,
                                   const std::string& value,
@@ -49,18 +169,6 @@ std::filesystem::path ResolvePath(const std::filesystem::path& config_path,
         return fallback;
     }
     return candidate;
-}
-
-std::string Trim(const std::string& value) {
-    size_t start = 0;
-    while (start < value.size() && std::isspace(static_cast<unsigned char>(value[start]))) {
-        ++start;
-    }
-    size_t end = value.size();
-    while (end > start && std::isspace(static_cast<unsigned char>(value[end - 1]))) {
-        --end;
-    }
-    return value.substr(start, end - start);
 }
 
 class CurlGlobalGuard {
@@ -99,36 +207,41 @@ struct AppConfig {
 };
 
 bool LoadConfig(const std::string& path, AppConfig* out) {
-    std::ifstream file(path);
-    if (!file.is_open()) {
-        std::cerr << "Failed to open config: " << path << "\n";
+    std::string raw;
+    if (!ReadFileWithLimit(path, kMaxConfigBytes, &raw)) {
         return false;
     }
 
     nlohmann::json j;
     try {
-        file >> j;
+        j = nlohmann::json::parse(raw);
     } catch (const std::exception& ex) {
         std::cerr << "Failed to parse config: " << ex.what() << "\n";
         return false;
     }
-    out->sync_interval_sec = j.value("sync_interval_sec", out->sync_interval_sec);
-    out->time_window_days = j.value("time_window_days", out->time_window_days);
-    out->idle_threshold_sec = j.value("idle_threshold_sec", out->idle_threshold_sec);
-    out->night_mode_enabled = j.value("night_mode_enabled", out->night_mode_enabled);
-    out->night_start_hour = j.value("night_start_hour", out->night_start_hour);
-    out->night_end_hour = j.value("night_end_hour", out->night_end_hour);
-    out->night_dim_alpha = j.value("night_dim_alpha", out->night_dim_alpha);
-    out->font_path = j.value("font_path", out->font_path);
-    out->db_path = j.value("db_path", out->db_path);
-    out->mock_mode = j.value("mock_mode", out->mock_mode);
-    out->ics_url = j.value("ics_url", out->ics_url);
-    out->weather_enabled = j.value("weather_enabled", out->weather_enabled);
-    out->weather_latitude = j.value("weather_latitude", out->weather_latitude);
-    out->weather_longitude = j.value("weather_longitude", out->weather_longitude);
-    out->weather_sync_interval_sec = j.value("weather_sync_interval_sec", out->weather_sync_interval_sec);
-    out->weather_sprite_dir = j.value("weather_sprite_dir", out->weather_sprite_dir);
-    out->sprite_dir = j.value("sprite_dir", out->sprite_dir);
+    if (!j.is_object()) {
+        std::cerr << "Config root must be a JSON object.\n";
+        return false;
+    }
+
+    if (!ReadIntInRange(j, "sync_interval_sec", 5, 24 * 60 * 60, &out->sync_interval_sec) ||
+        !ReadIntInRange(j, "time_window_days", 1, 365, &out->time_window_days) ||
+        !ReadIntInRange(j, "idle_threshold_sec", 5, 24 * 60 * 60, &out->idle_threshold_sec) ||
+        !ReadIntInRange(j, "night_start_hour", 0, 23, &out->night_start_hour) ||
+        !ReadIntInRange(j, "night_end_hour", 0, 23, &out->night_end_hour) ||
+        !ReadIntInRange(j, "night_dim_alpha", 0, 255, &out->night_dim_alpha) ||
+        !ReadIntInRange(j, "weather_sync_interval_sec", 60, 24 * 60 * 60, &out->weather_sync_interval_sec) ||
+        !ReadBool(j, "night_mode_enabled", &out->night_mode_enabled) ||
+        !ReadBool(j, "weather_enabled", &out->weather_enabled) ||
+        !ReadBool(j, "mock_mode", &out->mock_mode) ||
+        !ReadDoubleInRange(j, "weather_latitude", -90.0, 90.0, &out->weather_latitude) ||
+        !ReadDoubleInRange(j, "weather_longitude", -180.0, 180.0, &out->weather_longitude) ||
+        !ReadPathString(j, "font_path", kMaxPathBytes, &out->font_path) ||
+        !ReadPathString(j, "db_path", kMaxPathBytes, &out->db_path) ||
+        !ReadPathString(j, "weather_sprite_dir", kMaxPathBytes, &out->weather_sprite_dir) ||
+        !ReadPathString(j, "sprite_dir", kMaxPathBytes, &out->sprite_dir)) {
+        return false;
+    }
 
     return true;
 }
@@ -137,6 +250,10 @@ int main(int argc, char** argv) {
     std::string config_path = "config/config.json";
     if (argc > 1) {
         config_path = argv[1];
+        if (config_path.empty() || config_path.size() > kMaxPathBytes || ContainsControlChars(config_path)) {
+            std::cerr << "Config path is malformed or too large.\n";
+            return 1;
+        }
     }
 
     AppConfig config;
@@ -146,9 +263,15 @@ int main(int argc, char** argv) {
 
     const char* env_ics = std::getenv("ICS_URL");
     if (env_ics && env_ics[0] != '\0') {
-        config.ics_url = env_ics;
+        config.ics_url = Trim(env_ics);
+    } else {
+        config.ics_url.clear();
     }
-    config.ics_url = Trim(config.ics_url);
+    if (!config.ics_url.empty() &&
+        (config.ics_url.size() > kMaxUrlBytes || ContainsControlChars(config.ics_url))) {
+        std::cerr << "ICS_URL is malformed or too large.\n";
+        return 1;
+    }
     if (!config.mock_mode && config.ics_url.empty()) {
         std::cerr << "No ICS URL configured. Running in cache-only mode.\n";
     }

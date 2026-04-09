@@ -14,27 +14,41 @@
 
 namespace {
 
+constexpr size_t kMaxHttpBodyBytes = 2 * 1024 * 1024;
+constexpr size_t kMaxUrlBytes = 2048;
+constexpr size_t kMaxIcsLines = 50000;
+constexpr size_t kMaxIcsLineBytes = 8192;
+constexpr size_t kMaxFieldBytes = 512;
+constexpr size_t kMaxStatusBytes = 32;
+constexpr size_t kMaxEventsPerSync = 5000;
+
 struct HttpResponse {
     long code = 0;
     std::string body;
+    bool overflow = false;
 };
 
 size_t WriteCallback(void* ptr, size_t size, size_t nmemb, void* userdata) {
     size_t total = size * nmemb;
-    auto* out = static_cast<std::string*>(userdata);
-    out->append(static_cast<const char*>(ptr), total);
+    auto* out = static_cast<HttpResponse*>(userdata);
+    if (out->body.size() + total > kMaxHttpBodyBytes) {
+        out->overflow = true;
+        return 0;
+    }
+    out->body.append(static_cast<const char*>(ptr), total);
     return total;
 }
 
 bool HttpGet(CURL* curl, const std::string& url, const std::vector<std::string>& headers, HttpResponse* out) {
     out->body.clear();
     out->code = 0;
+    out->overflow = false;
 
     curl_easy_reset(curl);
     curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
     curl_easy_setopt(curl, CURLOPT_HTTPGET, 1L);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &out->body);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, out);
     curl_easy_setopt(curl, CURLOPT_USERAGENT, "rpi-calendar/1.0");
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, 15L);
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
@@ -50,6 +64,10 @@ bool HttpGet(CURL* curl, const std::string& url, const std::vector<std::string>&
     CURLcode res = curl_easy_perform(curl);
     if (header_list) {
         curl_slist_free_all(header_list);
+    }
+    if (out->overflow) {
+        std::cerr << "HTTP response exceeded the maximum allowed size.\n";
+        return false;
     }
     if (res != CURLE_OK) {
         std::cerr << "HTTP GET failed: " << curl_easy_strerror(res) << "\n";
@@ -150,8 +168,123 @@ std::string Trim(const std::string& value) {
     return value.substr(start, end - start);
 }
 
+bool ContainsControlChars(const std::string& value, bool allow_newlines) {
+    for (char c : value) {
+        unsigned char uc = static_cast<unsigned char>(c);
+        if (uc == '\r' || uc == '\n') {
+            if (!allow_newlines) {
+                return true;
+            }
+            continue;
+        }
+        if (uc == '\t') {
+            if (!allow_newlines) {
+                return true;
+            }
+            continue;
+        }
+        if (uc < 32 || uc == 127) {
+            return true;
+        }
+    }
+    return false;
+}
+
 bool LooksLikeUrl(const std::string& value) {
-    return value.rfind("http://", 0) == 0 || value.rfind("https://", 0) == 0;
+    if (value.empty() || value.size() > kMaxUrlBytes || ContainsControlChars(value, false)) {
+        return false;
+    }
+    if (!(value.rfind("http://", 0) == 0 || value.rfind("https://", 0) == 0)) {
+        return false;
+    }
+    size_t scheme_end = value.find("://");
+    return scheme_end != std::string::npos && scheme_end + 3 < value.size();
+}
+
+bool ValidateDateParts(int year, int month, int day, int hour, int min, int sec) {
+    if (year < 1970 || year > 9999) {
+        return false;
+    }
+    if (month < 1 || month > 12) {
+        return false;
+    }
+    if (day < 1 || day > 31) {
+        return false;
+    }
+    if (hour < 0 || hour > 23 || min < 0 || min > 59 || sec < 0 || sec > 59) {
+        return false;
+    }
+    return true;
+}
+
+bool ValidateNormalizedDate(time_t ts, int year, int month, int day, int hour, int min, int sec, bool utc) {
+    std::tm check{};
+    if (utc) {
+#ifdef _WIN32
+        if (gmtime_s(&check, &ts) != 0) {
+            return false;
+        }
+#else
+        std::tm* out = std::gmtime(&ts);
+        if (!out) {
+            return false;
+        }
+        check = *out;
+#endif
+    } else {
+        check = TimeUtil::LocalTime(ts);
+    }
+
+    return (check.tm_year + 1900) == year &&
+           (check.tm_mon + 1) == month &&
+           check.tm_mday == day &&
+           check.tm_hour == hour &&
+           check.tm_min == min &&
+           check.tm_sec == sec;
+}
+
+bool SanitizeTextField(const std::string& value, size_t max_bytes, std::string* out) {
+    if (value.size() > kMaxFieldBytes || ContainsControlChars(value, true)) {
+        return false;
+    }
+    std::string normalized;
+    normalized.reserve(value.size());
+    bool last_space = false;
+    for (char c : value) {
+        if (c == '\r' || c == '\n' || c == '\t') {
+            c = ' ';
+        }
+        if (c == ' ') {
+            if (last_space) {
+                continue;
+            }
+            last_space = true;
+        } else {
+            last_space = false;
+        }
+        normalized.push_back(c);
+    }
+    normalized = Trim(normalized);
+    if (normalized.size() > max_bytes) {
+        return false;
+    }
+    *out = normalized;
+    return true;
+}
+
+bool SanitizeStatusField(const std::string& value, std::string* out) {
+    std::string normalized = ToLower(Trim(value));
+    if (normalized.empty() || normalized.size() > kMaxStatusBytes) {
+        return false;
+    }
+    for (char c : normalized) {
+        unsigned char uc = static_cast<unsigned char>(c);
+        if (!(std::isalnum(uc) || c == '-' || c == '_')) {
+            return false;
+        }
+    }
+    *out = normalized;
+    return true;
 }
 
 bool ParseIcsDate(const std::string& value, time_t* out) {
@@ -164,6 +297,9 @@ bool ParseIcsDate(const std::string& value, time_t* out) {
         !ParseIcsInt(value, 6, 2, &day)) {
         return false;
     }
+    if (!ValidateDateParts(year, month, day, 0, 0, 0)) {
+        return false;
+    }
     std::tm tm{};
     tm.tm_year = year - 1900;
     tm.tm_mon = month - 1;
@@ -173,6 +309,9 @@ bool ParseIcsDate(const std::string& value, time_t* out) {
     tm.tm_sec = 0;
     time_t local = std::mktime(&tm);
     if (local == static_cast<time_t>(-1)) {
+        return false;
+    }
+    if (!ValidateNormalizedDate(local, year, month, day, 0, 0, 0, false)) {
         return false;
     }
     *out = local;
@@ -198,6 +337,9 @@ bool ParseIcsDateTime(const std::string& value, time_t* out, bool* is_utc) {
         !ParseIcsInt(v, 13, 2, &sec)) {
         return false;
     }
+    if (!ValidateDateParts(year, month, day, hour, min, sec)) {
+        return false;
+    }
     std::tm tm{};
     tm.tm_year = year - 1900;
     tm.tm_mon = month - 1;
@@ -207,6 +349,9 @@ bool ParseIcsDateTime(const std::string& value, time_t* out, bool* is_utc) {
     tm.tm_sec = sec;
     time_t ts = utc ? TimegmPortable(&tm) : std::mktime(&tm);
     if (ts == static_cast<time_t>(-1)) {
+        return false;
+    }
+    if (!ValidateNormalizedDate(ts, year, month, day, hour, min, sec, utc)) {
         return false;
     }
     if (is_utc) {
@@ -234,8 +379,8 @@ bool SplitIcsLine(const std::string& line, std::string* name, std::string* param
     return true;
 }
 
-std::vector<std::string> UnfoldIcsLines(const std::string& text) {
-    std::vector<std::string> lines;
+bool UnfoldIcsLines(const std::string& text, std::vector<std::string>* out, std::string* error) {
+    out->clear();
     std::istringstream stream(text);
     std::string line;
     std::string current;
@@ -243,19 +388,43 @@ std::vector<std::string> UnfoldIcsLines(const std::string& text) {
         if (!line.empty() && line.back() == '\r') {
             line.pop_back();
         }
+        if (line.size() > kMaxIcsLineBytes || ContainsControlChars(line, true)) {
+            if (error) {
+                *error = "ics line malformed";
+            }
+            return false;
+        }
         if (!line.empty() && (line[0] == ' ' || line[0] == '\t')) {
             current += line.substr(1);
+            if (current.size() > kMaxIcsLineBytes) {
+                if (error) {
+                    *error = "ics line too large";
+                }
+                return false;
+            }
         } else {
             if (!current.empty()) {
-                lines.push_back(current);
+                out->push_back(current);
+                if (out->size() > kMaxIcsLines) {
+                    if (error) {
+                        *error = "ics too many lines";
+                    }
+                    return false;
+                }
             }
             current = line;
         }
     }
     if (!current.empty()) {
-        lines.push_back(current);
+        out->push_back(current);
     }
-    return lines;
+    if (out->size() > kMaxIcsLines) {
+        if (error) {
+            *error = "ics too many lines";
+        }
+        return false;
+    }
+    return true;
 }
 
 bool FetchIcsEvents(CURL* curl, const SyncConfig& config, EventStore* store, int64_t sync_ts, std::string* error) {
@@ -281,13 +450,25 @@ bool FetchIcsEvents(CURL* curl, const SyncConfig& config, EventStore* store, int
         return false;
     }
 
-    auto lines = UnfoldIcsLines(resp.body);
+    if (resp.body.empty()) {
+        if (error) {
+            *error = "ics body empty";
+        }
+        return false;
+    }
+
+    std::vector<std::string> lines;
+    if (!UnfoldIcsLines(resp.body, &lines, error)) {
+        return false;
+    }
     bool in_event = false;
+    bool reject_event = false;
     EventRecord ev;
     bool has_start = false;
     bool has_end = false;
     bool start_is_date = false;
     bool end_is_date = false;
+    size_t stored_events = 0;
     int64_t now_ts = TimeUtil::NowTs();
     int64_t window_end = now_ts + static_cast<int64_t>(config.time_window_days) * 24 * 60 * 60;
 
@@ -296,11 +477,18 @@ bool FetchIcsEvents(CURL* curl, const SyncConfig& config, EventStore* store, int
         std::string params;
         std::string value;
         if (!SplitIcsLine(line, &name, &params, &value)) {
+            if (!Trim(line).empty()) {
+                if (error) {
+                    *error = "ics line malformed";
+                }
+                return false;
+            }
             continue;
         }
 
         if (name == "BEGIN" && ToUpper(value) == "VEVENT") {
             in_event = true;
+            reject_event = false;
             ev = EventRecord{};
             ev.calendar_id = "ics";
             ev.status = "confirmed";
@@ -312,7 +500,7 @@ bool FetchIcsEvents(CURL* curl, const SyncConfig& config, EventStore* store, int
         }
 
         if (name == "END" && ToUpper(value) == "VEVENT") {
-            if (in_event && has_start && !ev.id.empty()) {
+            if (in_event && !reject_event && has_start && !ev.id.empty()) {
                 if (ev.title.empty()) {
                     ev.title = "(No title)";
                 }
@@ -334,7 +522,19 @@ bool FetchIcsEvents(CURL* curl, const SyncConfig& config, EventStore* store, int
                 ev.updated_ts = sync_ts;
 
                 if (ev.end_ts >= now_ts && ev.start_ts <= window_end) {
-                    store->UpsertEvent(ev);
+                    if (stored_events >= kMaxEventsPerSync) {
+                        if (error) {
+                            *error = "ics too many events";
+                        }
+                        return false;
+                    }
+                    if (!store->UpsertEvent(ev)) {
+                        if (error) {
+                            *error = "event rejected";
+                        }
+                        return false;
+                    }
+                    ++stored_events;
                 }
             }
             in_event = false;
@@ -348,13 +548,28 @@ bool FetchIcsEvents(CURL* curl, const SyncConfig& config, EventStore* store, int
         std::string unescaped = IcsUnescape(value);
 
         if (name == "UID") {
-            ev.id = unescaped;
+            reject_event = reject_event || !SanitizeTextField(unescaped, 255, &ev.id);
         } else if (name == "SUMMARY") {
-            ev.title = unescaped;
+            std::string sanitized;
+            if (!SanitizeTextField(unescaped, 160, &sanitized)) {
+                reject_event = true;
+            } else {
+                ev.title = sanitized;
+            }
         } else if (name == "LOCATION") {
-            ev.location = unescaped;
+            std::string sanitized;
+            if (!SanitizeTextField(unescaped, 160, &sanitized)) {
+                reject_event = true;
+            } else {
+                ev.location = sanitized;
+            }
         } else if (name == "STATUS") {
-            ev.status = ToLower(unescaped);
+            std::string sanitized;
+            if (!SanitizeStatusField(unescaped, &sanitized)) {
+                reject_event = true;
+            } else {
+                ev.status = sanitized;
+            }
         } else if (name == "DTSTART") {
             bool value_is_date = params.find("VALUE=DATE") != std::string::npos || unescaped.size() == 8;
             if (value_is_date) {
@@ -364,6 +579,8 @@ bool FetchIcsEvents(CURL* curl, const SyncConfig& config, EventStore* store, int
                     ev.all_day = true;
                     has_start = true;
                     start_is_date = true;
+                } else {
+                    reject_event = true;
                 }
             } else {
                 time_t ts = 0;
@@ -372,6 +589,8 @@ bool FetchIcsEvents(CURL* curl, const SyncConfig& config, EventStore* store, int
                     ev.all_day = false;
                     has_start = true;
                     start_is_date = false;
+                } else {
+                    reject_event = true;
                 }
             }
         } else if (name == "DTEND") {
@@ -382,6 +601,8 @@ bool FetchIcsEvents(CURL* curl, const SyncConfig& config, EventStore* store, int
                     ev.end_ts = static_cast<int64_t>(ts);
                     has_end = true;
                     end_is_date = true;
+                } else {
+                    reject_event = true;
                 }
             } else {
                 time_t ts = 0;
@@ -389,6 +610,8 @@ bool FetchIcsEvents(CURL* curl, const SyncConfig& config, EventStore* store, int
                     ev.end_ts = static_cast<int64_t>(ts);
                     has_end = true;
                     end_is_date = false;
+                } else {
+                    reject_event = true;
                 }
             }
         } else if (name == "DTSTAMP" || name == "LAST-MODIFIED") {
